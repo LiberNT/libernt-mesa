@@ -10,6 +10,7 @@
 
 #include "hwdef/rogue_hw_utils.h"
 #include "pvr_bo.h"
+#include "pvr_cmd_buffer.h"
 #include "pvr_csb.h"
 #include "pvr_csb_enum_helpers.h"
 #include "pvr_device.h"
@@ -475,7 +476,8 @@ VkResult pvr_arch_spm_init_eot_state(
    struct pvr_pds_upload pds_eot_program;
    struct pvr_eot_props props;
    uint32_t usc_temp_count;
-   pco_shader *eot;
+   struct pvr_eot_shader *eot;
+   bool eot_owned;
    VkResult result;
 
    pvr_dev_addr_t next_scratch_buffer_addr =
@@ -590,17 +592,21 @@ VkResult pvr_arch_spm_init_eot_state(
 
    memcpy(props.tile_buffer_addrs, tile_buffer_addrs, sizeof(tile_buffer_addrs));
 
-   eot = pvr_usc_eot(device->pdevice->pco_ctx, &props, dev_info);
-   usc_temp_count = pco_shader_data(eot)->common.temps;
+   eot = pvr_arch_eot_shader_get(device, &props, &eot_owned);
+   if (!eot)
+      return vk_error(device, VK_ERROR_OUT_OF_HOST_MEMORY);
+
+   usc_temp_count = eot->temps;
 
    /* TODO: Create a #define in the compiler code to replace the 16. */
    result = pvr_gpu_upload_usc(device,
-                               pco_shader_binary_data(eot),
-                               pco_shader_binary_size(eot),
+                               eot->binary,
+                               eot->binary_size,
                                16,
                                &spm_eot_state->usc_eot_program);
 
-   ralloc_free(eot);
+   if (eot_owned)
+      vk_free(&device->vk.alloc, eot);
 
    if (result != VK_SUCCESS)
       return result;

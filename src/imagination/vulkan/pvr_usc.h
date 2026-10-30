@@ -37,6 +37,21 @@ struct pvr_eot_props {
    uint64_t tile_buffer_addrs[PVR_MAX_COLOR_ATTACHMENTS];
 };
 
+struct pvr_eot_shader_key {
+   uint32_t emit_count;
+   uint32_t num_output_regs;
+   uint32_t msaa_samples;
+   uint32_t state_words[PVR_MAX_COLOR_ATTACHMENTS][2];
+   uint64_t tile_buffer_addrs[PVR_MAX_COLOR_ATTACHMENTS];
+};
+
+struct pvr_eot_shader {
+   struct pvr_eot_shader_key key;
+   uint32_t temps;
+   uint32_t binary_size;
+   uint8_t binary[];
+};
+
 nir_shader *pvr_usc_fs_pfo_passthrough_nir (pco_ctx *ctx);
 
 pco_shader *pvr_usc_eot(pco_ctx *ctx,

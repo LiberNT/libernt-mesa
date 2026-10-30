@@ -772,6 +772,15 @@ void PVR_PER_ARCH(eot_shader_cache_finish)(struct pvr_device *device);
 #   define pvr_arch_eot_shader_cache_finish \
       PVR_PER_ARCH(eot_shader_cache_finish)
 
+struct pvr_eot_props;
+
+struct pvr_eot_shader *
+PVR_PER_ARCH(eot_shader_get)(struct pvr_device *device,
+                             struct pvr_eot_props *props,
+                             bool *owned);
+
+#   define pvr_arch_eot_shader_get PVR_PER_ARCH(eot_shader_get)
+
 #endif /* PVR_PER_ARCH */
 
 #endif /* PVR_CMD_BUFFER_H */

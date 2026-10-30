@@ -533,21 +533,6 @@ pvr_cmd_buffer_upload_pds_data(struct pvr_cmd_buffer *const cmd_buffer,
 
 #define PVR_EOT_SHADER_CACHE_MAX 64U
 
-struct pvr_eot_shader_key {
-   uint32_t emit_count;
-   uint32_t num_output_regs;
-   uint32_t msaa_samples;
-   uint32_t state_words[PVR_MAX_COLOR_ATTACHMENTS][2];
-   uint64_t tile_buffer_addrs[PVR_MAX_COLOR_ATTACHMENTS];
-};
-
-struct pvr_eot_shader {
-   struct pvr_eot_shader_key key;
-   uint32_t temps;
-   uint32_t binary_size;
-   uint8_t binary[];
-};
-
 static uint32_t pvr_eot_shader_key_hash(const void *key)
 {
    return _mesa_hash_data(key, sizeof(struct pvr_eot_shader_key));
@@ -584,9 +569,10 @@ pvr_eot_shader_compile(struct pvr_device *device,
    return shader;
 }
 
-static struct pvr_eot_shader *pvr_eot_shader_get(struct pvr_device *device,
-                                                 struct pvr_eot_props *props,
-                                                 bool *owned)
+struct pvr_eot_shader *
+PVR_PER_ARCH(eot_shader_get)(struct pvr_device *device,
+                             struct pvr_eot_props *props,
+                             bool *owned)
 {
    struct pvr_eot_shader_key key;
    struct pvr_eot_shader *shader;
@@ -709,7 +695,7 @@ static VkResult pvr_sub_cmd_gfx_per_job_fragment_programs_create_and_upload(
          props.msaa_samples = 1;
    }
 
-   eot = pvr_eot_shader_get(device, &props, &eot_owned);
+   eot = pvr_arch_eot_shader_get(device, &props, &eot_owned);
    if (!eot)
       return vk_error(device, VK_ERROR_OUT_OF_HOST_MEMORY);
 
