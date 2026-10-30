@@ -52,6 +52,7 @@
 #define CD3D_MAX_DEVICES 4
 #define CD3D_MAX_FDS 16
 #define CD3D_BATCH_OFFSET 64u
+#define CD3D_RENDER_RETRIES 200u
 #define CD3D_STATE_ALIGN 4096u
 #define CD3D_APERTURE_SIZE (256ull * 1024 * 1024)
 /* Pre-Haswell vertex buffer end addresses point past the buffer. */
@@ -1010,6 +1011,10 @@ cd3d_execbuffer2(struct cd3d_device *dev, struct drm_i915_gem_execbuffer2 *exec)
    render.AllocationCount = allocation_count;
    render.PatchLocationCount = patch_count;
    NTSTATUS status = D3DKMTRender(&render);
+   for (unsigned retry = 0; status == STATUS_DEVICE_BUSY && retry < CD3D_RENDER_RETRIES; retry++) {
+      Sleep(1);
+      status = D3DKMTRender(&render);
+   }
    if (!NT_SUCCESS(status)) {
       mesa_loge("crocus: D3DKMTRender failed: 0x%08lx, %u bytes, %u allocations, %u patches",
                 status, command_length, allocation_count, patch_count);
