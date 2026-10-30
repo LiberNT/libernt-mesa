@@ -24,6 +24,8 @@ struct pvr_winsys_rt_dataset;
 struct pvr_rt_dataset {
    struct pvr_device *device;
 
+   struct list_head cache_link;
+
    /* RT dataset information */
    uint32_t width;
    uint32_t height;
@@ -69,6 +71,14 @@ void pvr_rt_tpc_data_fini(struct pvr_rt_dataset *rt_dataset);
 void pvr_rt_vheap_rtc_data_fini(struct pvr_rt_dataset *rt_dataset);
 
 void pvr_render_target_dataset_destroy(struct pvr_rt_dataset *rt_dataset);
+
+struct pvr_rt_dataset *pvr_rt_dataset_cache_take(struct pvr_device *device,
+                                                 uint32_t width,
+                                                 uint32_t height,
+                                                 uint32_t samples,
+                                                 uint32_t layers);
+
+void pvr_rt_dataset_cache_finish(struct pvr_device *device);
 
 static inline void
 pvr_render_targets_datasets_destroy(struct pvr_render_target *render_target)

@@ -30,6 +30,7 @@
 #include "pvr_query.h"
 #include "pvr_queue.h"
 #include "pvr_robustness.h"
+#include "pvr_rt_dataset.h"
 #include "pvr_tex_state.h"
 
 #define PVR_GLOBAL_FREE_LIST_INITIAL_SIZE (2U * 1024U * 1024U)
@@ -852,6 +853,10 @@ VkResult PVR_PER_ARCH(create_device)(struct pvr_physical_device *pdevice,
    simple_mtx_init(&device->rs_mtx, mtx_plain);
    list_inithead(&device->render_states);
 
+   simple_mtx_init(&device->rt_dataset_cache_mtx, mtx_plain);
+   list_inithead(&device->rt_dataset_cache);
+   device->rt_dataset_cache_count = 0;
+
    *pDevice = pvr_device_to_handle(device);
 
    return VK_SUCCESS;
@@ -936,6 +941,8 @@ void PVR_PER_ARCH(destroy_device)(struct pvr_device *device,
    }
    simple_mtx_unlock(&device->rs_mtx);
    simple_mtx_destroy(&device->rs_mtx);
+
+   pvr_rt_dataset_cache_finish(device);
 
    pvr_arch_border_color_table_finish(device);
    pvr_robustness_buffer_finish(device);
