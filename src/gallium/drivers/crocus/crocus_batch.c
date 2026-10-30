@@ -521,6 +521,7 @@ crocus_batch_reset(struct crocus_batch *batch)
    batch->primary_batch_size = 0;
    batch->contains_draw = false;
    batch->contains_fence_signal = false;
+   batch->estimated_pixels = 0;
    batch->state_base_address_emitted = false;
    batch->screen->vtbl.batch_reset_dirty(batch);
 
