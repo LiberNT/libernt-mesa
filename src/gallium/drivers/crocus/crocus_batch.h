@@ -131,6 +131,9 @@ struct crocus_batch {
    /** The amount of aperture space (in bytes) used by all exec_bos */
    int aperture_space;
 
+   /** Upper bound on the pixels the draws in this batch can shade */
+   uint64_t estimated_pixels;
+
    struct {
       /** Uploader to use for sequence numbers */
       struct u_upload_mgr *uploader;

@@ -349,6 +349,9 @@ crocus_draw_vbo_get_vertex_count(struct pipe_context *ctx,
    ctx->draw_vbo(ctx, &info, drawid_offset, NULL, &draw, 1);
 }
 
+/* 350 ms of flat fill on HD Graphics 4000. */
+#define CROCUS_BATCH_PIXEL_LIMIT (512ull * 1024 * 1024)
+
 /**
  * The pipe->draw_vbo() driver hook.  Performs a draw on the GPU.
  */
@@ -443,6 +446,14 @@ crocus_draw_vbo(struct pipe_context *ctx,
 
    ice->state.dirty &= ~CROCUS_ALL_DIRTY_FOR_RENDER;
    ice->state.stage_dirty &= ~CROCUS_ALL_STAGE_DIRTY_FOR_RENDER;
+
+   /* WDDM resets the GPU when one packet runs for 2 seconds, so a batch of
+    * large draws has to reach the kernel in pieces.
+    */
+   const struct pipe_framebuffer_state *fb = &ice->state.framebuffer;
+   batch->estimated_pixels += (uint64_t) fb->width * fb->height * info->instance_count;
+   if (batch->estimated_pixels >= CROCUS_BATCH_PIXEL_LIMIT)
+      crocus_batch_flush(batch);
 }
 
 static void
