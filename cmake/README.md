@@ -19,6 +19,24 @@ links V3D and its ReactOS D3DKMT winsys for WoW64 applications, without the
 legacy VC4 driver. LLVMpipe replaces Softpipe when enabled but does not remove
 either ARM64 Raspberry Pi hardware driver.
 
+## Crocus
+
+`MESA_CROCUS` (on by default for the AMD64 and i386 ReactOS SDK builds) adds
+the Crocus driver for Intel Gfx4-8 to the WGL ICD. Its winsys,
+`src/gallium/winsys/crocus/d3dkmt`, implements the i915 uAPI Crocus uses on top
+of the LiberNT hdgfx D3DKMT contract (`drivers/directx/hdgfx_umd.h` in the
+LiberNT tree), through the `intel_virtio_*` transport hooks. WGL tries Crocus
+before the software renderers; it fails over when the display adapter is not
+hdgfx.
+
+`cmake/intel/compat` holds the POSIX pieces the Intel libraries expect and a
+no-op batch decoder (the real one needs expat). `cmake/intel/blorp_shaders.*`
+is the `vtn_bindgen2` output for `blorp_check_in_bounds`, the only OpenCL
+helper BLORP uses on Gfx4-8; generating it needs `mesa_clc`, so it is checked
+in. Regenerate it with a Linux meson build of this tree
+(`-Dgallium-drivers=crocus -Dmesa-clc=enabled`, target
+`src/intel/blorp/blorp_shaders.h`) and keep only that function.
+
 ## ReactOS build
 
 Use the existing `MESA_GALLIUM_FROM_SOURCE` and `ENABLE_MESA_LLVMPIPE` options
