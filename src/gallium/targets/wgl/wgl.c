@@ -75,6 +75,9 @@
 #ifdef GALLIUM_V3D
 #include "v3d/d3dkmt/v3d_d3dkmt_public.h"
 #endif
+#ifdef GALLIUM_CROCUS
+#include "crocus/d3dkmt/crocus_d3dkmt_public.h"
+#endif
 
 static struct stw_winsys stw_winsys;
 
@@ -92,6 +95,9 @@ static bool use_vc4 = false;
 #endif
 #ifdef GALLIUM_V3D
 static bool use_v3d = false;
+#endif
+#ifdef GALLIUM_CROCUS
+static bool use_crocus = false;
 #endif
 
 static const char *created_driver_name = NULL;
@@ -144,6 +150,13 @@ wgl_screen_create_by_name(HDC hDC, const char* driver, struct sw_winsys *winsys)
          use_v3d = true;
    }
 #endif
+#ifdef GALLIUM_CROCUS
+   if (strcmp(driver, "crocus") == 0) {
+      screen = crocus_d3dkmt_screen_create();
+      if (screen)
+         use_crocus = true;
+   }
+#endif
 #ifdef GALLIUM_SOFTPIPE
    if (strcmp(driver, "softpipe") == 0) {
       screen = softpipe_create_screen(winsys);
@@ -170,6 +183,9 @@ wgl_screen_create(HDC hDC)
 #endif
 #ifdef GALLIUM_VC4
       sw_only ? "" : "vc4",
+#endif
+#ifdef GALLIUM_CROCUS
+      sw_only ? "" : "crocus",
 #endif
 #ifdef GALLIUM_D3D12
       sw_only ? "" : "d3d12",
@@ -198,6 +214,10 @@ wgl_screen_create(HDC hDC)
             stw_winsys.presentation_trace = vc4_d3dkmt_trace_control;
             stw_winsys.presentation_trace_bank = &vc4_present_trace;
          }
+#endif
+#ifdef GALLIUM_CROCUS
+         if (use_crocus)
+            winsys->destroy(winsys);
 #endif
 #ifdef GALLIUM_V3D
          if (use_v3d) {
@@ -271,6 +291,12 @@ wgl_present(struct pipe_screen *screen,
 #ifdef GALLIUM_V3D
    if (use_v3d) {
       screen->flush_frontbuffer(screen, ctx, res, 0, 0, hDC, 0, NULL);
+      return;
+   }
+#endif
+#ifdef GALLIUM_CROCUS
+   if (use_crocus) {
+      crocus_d3dkmt_present(ctx, res, hDC);
       return;
    }
 #endif
