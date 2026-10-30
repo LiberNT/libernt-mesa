@@ -791,12 +791,12 @@ crocus_resource_from_handle(struct pipe_screen *pscreen,
 
    switch (whandle->type) {
    case WINSYS_HANDLE_TYPE_FD:
-      res->bo = crocus_bo_import_dmabuf(bufmgr, whandle->handle,
+      res->bo = crocus_bo_import_dmabuf(bufmgr, (int)(intptr_t)whandle->handle,
                                         whandle->modifier);
       break;
    case WINSYS_HANDLE_TYPE_SHARED:
       res->bo = crocus_bo_gem_create_from_name(bufmgr, "winsys image",
-                                               whandle->handle);
+                                               (unsigned)(uintptr_t)whandle->handle);
       break;
    default:
       UNREACHABLE("invalid winsys handle type");
@@ -1004,8 +1004,13 @@ crocus_resource_get_handle(struct pipe_screen *pscreen,
 #endif
 
    switch (whandle->type) {
-   case WINSYS_HANDLE_TYPE_SHARED:
-      return crocus_bo_flink(bo, &whandle->handle) == 0;
+   case WINSYS_HANDLE_TYPE_SHARED: {
+      uint32_t name;
+      if (crocus_bo_flink(bo, &name))
+         return false;
+      whandle->handle = (__typeof__(whandle->handle))(uintptr_t)name;
+      return true;
+   }
    case WINSYS_HANDLE_TYPE_KMS: {
       /* Because we share the same drm file across multiple crocus_screen, when
        * we export a GEM handle we must make sure it is valid in the DRM file
@@ -1015,7 +1020,7 @@ crocus_resource_get_handle(struct pipe_screen *pscreen,
       uint32_t handle;
       if (crocus_bo_export_gem_handle_for_device(bo, screen->winsys_fd, &handle))
          return false;
-      whandle->handle = handle;
+      whandle->handle = (__typeof__(whandle->handle))(uintptr_t)handle;
       return true;
    }
    case WINSYS_HANDLE_TYPE_FD:
@@ -1876,12 +1881,12 @@ crocus_memobj_create_from_handle(struct pipe_screen *pscreen,
    switch (whandle->type) {
    case WINSYS_HANDLE_TYPE_SHARED:
       bo = crocus_bo_gem_create_from_name(screen->bufmgr, "winsys image",
-                                        whandle->handle);
+                                        (unsigned)(uintptr_t)whandle->handle);
       break;
    case WINSYS_HANDLE_TYPE_FD:
       mod_inf = isl_drm_modifier_get_info(whandle->modifier);
       if (mod_inf) {
-         bo = crocus_bo_import_dmabuf(screen->bufmgr, whandle->handle,
+         bo = crocus_bo_import_dmabuf(screen->bufmgr, (int)(intptr_t)whandle->handle,
                                     whandle->modifier);
       } else {
          /* If we can't get information about the tiling from the
@@ -1889,7 +1894,7 @@ crocus_memobj_create_from_handle(struct pipe_screen *pscreen,
           * create the resource.
           */
          bo = crocus_bo_import_dmabuf_no_mods(screen->bufmgr,
-                                            whandle->handle);
+                                            (int)(intptr_t)whandle->handle);
       }
 
       break;
