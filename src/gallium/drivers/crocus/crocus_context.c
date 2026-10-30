@@ -96,6 +96,7 @@ crocus_lost_context_state(struct crocus_batch *batch)
    }
 
    ice->state.dirty = ~0ull;
+   ice->state.stage_dirty = ~0ull;
    memset(ice->state.last_grid, 0, sizeof(ice->state.last_grid));
    batch->state_base_address_emitted = false;
    screen->vtbl.lost_genx_state(ice, batch);
