@@ -40,6 +40,7 @@
 #include "pipe/p_screen.h"
 #include "pipe/p_state.h"
 #include "util/driconf.h"
+#include "util/log.h"
 #include "util/u_inlines.h"
 #include "util/u_memory.h"
 #include "util/xmlconfig.h"
@@ -52,6 +53,8 @@
 #define CD3D_BATCH_OFFSET 64u
 #define CD3D_STATE_ALIGN 4096u
 #define CD3D_APERTURE_SIZE (256ull * 1024 * 1024)
+/* Pre-Haswell vertex buffer end addresses point past the buffer. */
+#define CD3D_BO_TAIL 4096u
 
 typedef NTSTATUS (NTAPI *PFN_NT_COMPARE_OBJECTS)(HANDLE, HANDLE);
 
@@ -309,8 +312,11 @@ cd3d_device_open(struct cd3d_device *dev)
 {
    D3DKMT_OPENADAPTERFROMGDIDISPLAYNAME open = { 0 };
    wcscpy(open.DeviceName, L"\\\\.\\DISPLAY1");
-   if (!NT_SUCCESS(D3DKMTOpenAdapterFromGdiDisplayName(&open)))
+   NTSTATUS status = D3DKMTOpenAdapterFromGdiDisplayName(&open);
+   if (!NT_SUCCESS(status)) {
+      mesa_loge("crocus: D3DKMTOpenAdapterFromGdiDisplayName failed: 0x%08lx", status);
       return false;
+   }
    dev->adapter = open.hAdapter;
 
    D3DKMT_QUERY_DEVICE_IDS ids = { 0 };
@@ -319,9 +325,12 @@ cd3d_device_open(struct cd3d_device *dev)
    query.Type = KMTQAITYPE_PHYSICALADAPTERDEVICEIDS;
    query.pPrivateDriverData = &ids;
    query.PrivateDriverDataSize = sizeof(ids);
-   if (!NT_SUCCESS(D3DKMTQueryAdapterInfo(&query)) ||
-       ids.DeviceIds.VendorID != 0x8086)
+   status = D3DKMTQueryAdapterInfo(&query);
+   if (!NT_SUCCESS(status) || ids.DeviceIds.VendorID != 0x8086) {
+      mesa_loge("crocus: adapter device IDs: 0x%08lx, vendor 0x%04x",
+                status, ids.DeviceIds.VendorID);
       return false;
+   }
    dev->pci_device_id = ids.DeviceIds.DeviceID;
    dev->pci_revision_id = ids.DeviceIds.RevisionID;
 
@@ -332,8 +341,11 @@ cd3d_device_open(struct cd3d_device *dev)
 
    D3DKMT_CREATEDEVICE create_device = { 0 };
    create_device.hAdapter = dev->adapter;
-   if (!NT_SUCCESS(D3DKMTCreateDevice(&create_device)))
+   status = D3DKMTCreateDevice(&create_device);
+   if (!NT_SUCCESS(status)) {
+      mesa_loge("crocus: D3DKMTCreateDevice failed: 0x%08lx", status);
       return false;
+   }
    dev->device = create_device.hDevice;
 
    HDGFX_GEN_CONTEXT_DATA data = { HDGFX_GEN_CONTEXT_MAGIC, HDGFX_GEN_CONTEXT_VERSION };
@@ -342,10 +354,15 @@ cd3d_device_open(struct cd3d_device *dev)
    create_context.pPrivateDriverData = &data;
    create_context.PrivateDriverDataSize = sizeof(data);
    create_context.ClientHint = D3DKMT_CLIENTHINT_OPENGL;
-   if (!NT_SUCCESS(D3DKMTCreateContext(&create_context)) ||
+   status = D3DKMTCreateContext(&create_context);
+   if (!NT_SUCCESS(status) ||
        create_context.CommandBufferSize < HDGFX_GEN_COMMAND_BUFFER_SIZE ||
        create_context.AllocationListSize < HDGFX_GEN_ALLOCATION_LIST_SIZE ||
        create_context.PatchLocationListSize < HDGFX_GEN_PATCH_LIST_SIZE) {
+      mesa_loge("crocus: D3DKMTCreateContext: 0x%08lx, buffers %u/%u/%u",
+                status, create_context.CommandBufferSize,
+                create_context.AllocationListSize,
+                create_context.PatchLocationListSize);
       if (create_context.hContext)
          dev->context = create_context.hContext;
       return false;
@@ -362,8 +379,11 @@ cd3d_device_open(struct cd3d_device *dev)
    sync.hDevice = dev->device;
    sync.Info.Type = D3DDDI_MONITORED_FENCE;
    sync.Info.MonitoredFence.InitialFenceValue = 0;
-   if (!NT_SUCCESS(D3DKMTCreateSynchronizationObject2(&sync)))
+   status = D3DKMTCreateSynchronizationObject2(&sync);
+   if (!NT_SUCCESS(status)) {
+      mesa_loge("crocus: monitored fence creation failed: 0x%08lx", status);
       return false;
+   }
    dev->fence_object = sync.hSyncObject;
    dev->fence_cpu = sync.Info.MonitoredFence.FenceValueCPUVirtualAddress;
    return dev->fence_cpu != NULL;
@@ -387,12 +407,14 @@ cd3d_create_fd(void)
 
    int fd = _open("NUL", _O_RDWR | _O_BINARY);
    if (fd < 0) {
+      mesa_loge("crocus: cannot open NUL: %d", errno);
       cd3d_device_destroy(dev);
       return -1;
    }
    if (!DuplicateHandle(GetCurrentProcess(), (HANDLE)_get_osfhandle(fd),
                         GetCurrentProcess(), &dev->identity, 0, FALSE,
                         DUPLICATE_SAME_ACCESS)) {
+      mesa_loge("crocus: DuplicateHandle failed: %lu", GetLastError());
       _close(fd);
       cd3d_device_destroy(dev);
       return -1;
@@ -527,14 +549,14 @@ cd3d_getparam(struct cd3d_device *dev, struct drm_i915_getparam *gp)
 static int
 cd3d_gem_create(struct cd3d_device *dev, struct drm_i915_gem_create *create)
 {
-   if (create->size == 0 || create->size > UINT32_MAX)
+   if (create->size == 0 || create->size > UINT32_MAX - CD3D_BO_TAIL)
       return EINVAL;
 
    uint32_t handle = cd3d_bo_slot(dev);
    if (!handle)
       return ENOMEM;
 
-   UINT size = (UINT)create->size;
+   UINT size = (UINT)create->size + CD3D_BO_TAIL;
    D3DDDI_ALLOCATIONINFO info = { 0 };
    info.pPrivateDriverData = &size;
    info.PrivateDriverDataSize = sizeof(size);
@@ -543,13 +565,15 @@ cd3d_gem_create(struct cd3d_device *dev, struct drm_i915_gem_create *create)
    alloc.NumAllocations = 1;
    alloc.pAllocationInfo = &info;
    NTSTATUS status = D3DKMTCreateAllocation(&alloc);
-   if (!NT_SUCCESS(status))
+   if (!NT_SUCCESS(status)) {
+      mesa_loge("crocus: D3DKMTCreateAllocation(%u) failed: 0x%08lx", size, status);
       return cd3d_errno(status);
+   }
 
    struct cd3d_bo *bo = &dev->bos[handle - 1];
    memset(bo, 0, sizeof(*bo));
    bo->allocation = info.hAllocation;
-   bo->size = size;
+   bo->size = (uint32_t)create->size;
    create->handle = handle;
    return 0;
 }
@@ -585,8 +609,11 @@ cd3d_bo_map(struct cd3d_device *dev, struct cd3d_bo *bo)
    D3DKMT_LOCK2 lock = { 0 };
    lock.hDevice = dev->device;
    lock.hAllocation = bo->allocation;
-   if (!NT_SUCCESS(D3DKMTLock2(&lock)))
+   NTSTATUS status = D3DKMTLock2(&lock);
+   if (!NT_SUCCESS(status)) {
+      mesa_loge("crocus: D3DKMTLock2 failed: 0x%08lx", status);
       return NULL;
+   }
    bo->map = lock.pData;
    return bo->map;
 }
@@ -805,7 +832,7 @@ cd3d_execbuffer2(struct cd3d_device *dev, struct drm_i915_gem_execbuffer2 *exec)
       return ENOMEM;
    for (uint32_t i = 0; i < count; i++) {
       allocation_index[i] = UINT32_MAX;
-      if (i == batch_index || i == state_index)
+      if (i == batch_index)
          continue;
       struct cd3d_bo *bo = cd3d_bo_get(dev, objects[i].handle);
       if (!bo || allocation_count >= dev->allocation_list_size) {
@@ -868,7 +895,8 @@ cd3d_execbuffer2(struct cd3d_device *dev, struct drm_i915_gem_execbuffer2 *exec)
             return EINVAL;
          }
          if (reloc->target_handle == state_index)
-            ret = cd3d_add_patch(dev, &patch_count, patch_offset, 0,
+            ret = cd3d_add_patch(dev, &patch_count, patch_offset,
+                                 allocation_index[state_index],
                                  reloc->delta, HDGFX_GEN_PATCH_STATE);
          else
             ret = cd3d_add_patch(dev, &patch_count, patch_offset,
@@ -888,6 +916,8 @@ cd3d_execbuffer2(struct cd3d_device *dev, struct drm_i915_gem_execbuffer2 *exec)
    render.PatchLocationCount = patch_count;
    NTSTATUS status = D3DKMTRender(&render);
    if (!NT_SUCCESS(status)) {
+      mesa_loge("crocus: D3DKMTRender failed: 0x%08lx, %u bytes, %u allocations, %u patches",
+                status, command_length, allocation_count, patch_count);
       free(allocation_index);
       return cd3d_errno(status);
    }
@@ -906,8 +936,10 @@ cd3d_execbuffer2(struct cd3d_device *dev, struct drm_i915_gem_execbuffer2 *exec)
    signal.MonitoredFenceValueArray = &fence;
    status = D3DKMTSignalSynchronizationObjectFromGpu(&signal);
    free(allocation_index);
-   if (!NT_SUCCESS(status))
+   if (!NT_SUCCESS(status)) {
+      mesa_loge("crocus: fence signal failed: 0x%08lx", status);
       return cd3d_errno(status);
+   }
    dev->fence_last = fence;
 
    for (uint32_t i = 0; i < count; i++) {
@@ -1001,6 +1033,8 @@ cd3d_ioctl_locked(struct cd3d_device *dev, unsigned long request, void *arg)
       madv->retained = 1;
       return 0;
    }
+   case DRM_IOCTL_I915_GEM_SET_CACHING:
+      return cd3d_bo_get(dev, ((struct drm_i915_gem_caching *)arg)->handle) ? 0 : ENOENT;
    case DRM_IOCTL_I915_GEM_MMAP:
       return cd3d_gem_mmap(dev, arg);
    case DRM_IOCTL_I915_GEM_SET_TILING:
@@ -1019,7 +1053,11 @@ cd3d_ioctl_locked(struct cd3d_device *dev, unsigned long request, void *arg)
       return cd3d_syncobj_destroy(dev, arg);
    case DRM_IOCTL_SYNCOBJ_WAIT:
       return cd3d_syncobj_wait(dev, arg);
+   case DRM_IOCTL_I915_QUERY:
+   case DRM_IOCTL_I915_GEM_USERPTR:
+      return ENODEV;
    default:
+      mesa_logw("crocus: unhandled ioctl 0x%lx", request);
       return ENODEV;
    }
 }
