@@ -321,6 +321,57 @@ static inline void pvr_bo_free_bo(const struct pvr_device *const device,
    vk_free(&device->vk.alloc, ptr);
 }
 
+#define PVR_BO_CACHE_MAX_BO_SIZE (64U * 1024U)
+#define PVR_BO_CACHE_MAX_COUNT 64U
+
+static inline bool pvr_bo_cacheable(uint64_t size, uint64_t flags)
+{
+   return (flags & PVR_BO_ALLOC_FLAG_CPU_MAPPED) &&
+          !(flags & PVR_BO_ALLOC_FLAG_PM_FW_PROTECT) &&
+          size <= PVR_BO_CACHE_MAX_BO_SIZE;
+}
+
+static struct pvr_bo *pvr_bo_cache_take(struct pvr_device *device,
+                                        struct pvr_winsys_heap *heap,
+                                        uint64_t size,
+                                        uint64_t alignment,
+                                        uint64_t flags)
+{
+   struct pvr_bo *found = NULL;
+
+   simple_mtx_lock(&device->bo_cache_mtx);
+   list_for_each_entry (struct pvr_bo, pvr_bo, &device->bo_cache, link) {
+      if (pvr_bo->heap == heap && pvr_bo->size == size &&
+          pvr_bo->flags == flags &&
+          !(pvr_bo->vma->dev_addr.addr & (alignment - 1))) {
+         list_del(&pvr_bo->link);
+         device->bo_cache_count--;
+         found = pvr_bo;
+         break;
+      }
+   }
+   simple_mtx_unlock(&device->bo_cache_mtx);
+
+   return found;
+}
+
+static void pvr_bo_destroy(struct pvr_device *device, struct pvr_bo *pvr_bo)
+{
+#if defined(HAVE_VALGRIND)
+   vk_free(&device->vk.alloc, pvr_bo->bo->vbits);
+#endif /* defined(HAVE_VALGRIND) */
+
+   device->ws->ops->vma_unmap(pvr_bo->vma);
+   device->ws->ops->heap_free(pvr_bo->vma);
+
+   if (pvr_bo->bo->map)
+      device->ws->ops->buffer_unmap(pvr_bo->bo, false);
+
+   device->ws->ops->buffer_destroy(pvr_bo->bo);
+
+   pvr_bo_free_bo(device, pvr_bo);
+}
+
 /**
  * \brief Helper interface to allocate a GPU buffer and map it to both host and
  * device virtual memory. Host mapping is conditional and is controlled by
@@ -348,6 +399,26 @@ VkResult pvr_bo_alloc(struct pvr_device *device,
    struct pvr_bo *pvr_bo;
    VkResult result;
 
+   if (pvr_bo_cacheable(size, flags)) {
+      pvr_bo = pvr_bo_cache_take(device, heap, size, alignment, flags);
+      if (pvr_bo) {
+         if (!pvr_bo->bo->map) {
+            result = device->ws->ops->buffer_map(pvr_bo->bo, NULL);
+            if (result != VK_SUCCESS) {
+               pvr_bo_destroy(device, pvr_bo);
+               return result;
+            }
+         }
+
+         memset(pvr_bo->bo->map, 0, size);
+         pvr_bo->ref_count = 1;
+         pvr_bo_store_insert(device->bo_store, pvr_bo);
+         *pvr_bo_out = pvr_bo;
+
+         return VK_SUCCESS;
+      }
+   }
+
    pvr_bo = pvr_bo_alloc_bo(device);
    if (!pvr_bo) {
       result = vk_error(device, VK_ERROR_OUT_OF_HOST_MEMORY);
@@ -355,6 +426,9 @@ VkResult pvr_bo_alloc(struct pvr_device *device,
    }
 
    pvr_bo->ref_count = 1;
+   pvr_bo->heap = heap;
+   pvr_bo->size = size;
+   pvr_bo->flags = flags;
 
    result = device->ws->ops->buffer_create(device->ws,
                                            size,
@@ -469,27 +543,50 @@ void pvr_bo_cpu_unmap(struct pvr_device *device, struct pvr_bo *pvr_bo)
  */
 void pvr_bo_free(struct pvr_device *device, struct pvr_bo *pvr_bo)
 {
+   struct pvr_bo *evicted = NULL;
+
    if (!pvr_bo)
       return;
 
    if (!p_atomic_dec_zero(&pvr_bo->ref_count))
       return;
 
-#if defined(HAVE_VALGRIND)
-   vk_free(&device->vk.alloc, pvr_bo->bo->vbits);
-#endif /* defined(HAVE_VALGRIND) */
-
    pvr_bo_store_remove(device->bo_store, pvr_bo);
 
-   device->ws->ops->vma_unmap(pvr_bo->vma);
-   device->ws->ops->heap_free(pvr_bo->vma);
+   if (!pvr_bo_cacheable(pvr_bo->size, pvr_bo->flags)) {
+      pvr_bo_destroy(device, pvr_bo);
+      return;
+   }
 
-   if (pvr_bo->bo->map)
-      device->ws->ops->buffer_unmap(pvr_bo->bo, false);
+   simple_mtx_lock(&device->bo_cache_mtx);
+   list_add(&pvr_bo->link, &device->bo_cache);
+   if (++device->bo_cache_count > PVR_BO_CACHE_MAX_COUNT) {
+      evicted = list_last_entry(&device->bo_cache, struct pvr_bo, link);
+      list_del(&evicted->link);
+      device->bo_cache_count--;
+   }
+   simple_mtx_unlock(&device->bo_cache_mtx);
 
-   device->ws->ops->buffer_destroy(pvr_bo->bo);
+   if (evicted)
+      pvr_bo_destroy(device, evicted);
+}
 
-   pvr_bo_free_bo(device, pvr_bo);
+void pvr_bo_cache_init(struct pvr_device *device)
+{
+   simple_mtx_init(&device->bo_cache_mtx, mtx_plain);
+   list_inithead(&device->bo_cache);
+   device->bo_cache_count = 0;
+}
+
+void pvr_bo_cache_finish(struct pvr_device *device)
+{
+   list_for_each_entry_safe (struct pvr_bo, pvr_bo, &device->bo_cache, link) {
+      list_del(&pvr_bo->link);
+      pvr_bo_destroy(device, pvr_bo);
+   }
+
+   device->bo_cache_count = 0;
+   simple_mtx_destroy(&device->bo_cache_mtx);
 }
 
 /**

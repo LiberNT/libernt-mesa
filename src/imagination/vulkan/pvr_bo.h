@@ -57,6 +57,10 @@ struct pvr_bo {
    struct pvr_winsys_bo *bo;
    struct pvr_winsys_vma *vma;
    uint32_t ref_count;
+
+   struct pvr_winsys_heap *heap;
+   uint64_t size;
+   uint64_t flags;
 };
 
 struct pvr_suballocator {
@@ -126,6 +130,9 @@ VkResult pvr_bo_alloc(struct pvr_device *device,
 VkResult pvr_bo_cpu_map(struct pvr_device *device, struct pvr_bo *bo);
 void pvr_bo_cpu_unmap(struct pvr_device *device, struct pvr_bo *bo);
 void pvr_bo_free(struct pvr_device *device, struct pvr_bo *bo);
+
+void pvr_bo_cache_init(struct pvr_device *device);
+void pvr_bo_cache_finish(struct pvr_device *device);
 
 void pvr_bo_suballocator_init(struct pvr_suballocator *allocator,
                               struct pvr_winsys_heap *heap,

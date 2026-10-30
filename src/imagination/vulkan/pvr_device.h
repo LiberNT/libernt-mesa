@@ -150,6 +150,10 @@ struct pvr_device {
    simple_mtx_t rt_dataset_cache_mtx;
    struct list_head rt_dataset_cache;
    uint32_t rt_dataset_cache_count;
+
+   simple_mtx_t bo_cache_mtx;
+   struct list_head bo_cache;
+   uint32_t bo_cache_count;
 };
 
 struct pvr_device_memory {

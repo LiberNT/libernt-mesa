@@ -753,6 +753,8 @@ VkResult PVR_PER_ARCH(create_device)(struct pvr_physical_device *pdevice,
    if (result != VK_SUCCESS)
       goto err_vk_device_finish;
 
+   pvr_bo_cache_init(device);
+
    pvr_bo_suballocator_init(&device->suballoc_general,
                             device->heaps.general_heap,
                             device,
@@ -908,6 +910,7 @@ err_dec_device_count:
    pvr_bo_suballocator_fini(&device->suballoc_pds);
    pvr_bo_suballocator_fini(&device->suballoc_general);
 
+   pvr_bo_cache_finish(device);
    pvr_bo_store_destroy(device);
 
 err_vk_device_finish:
@@ -967,6 +970,7 @@ void PVR_PER_ARCH(destroy_device)(struct pvr_device *device,
    pvr_bo_suballocator_fini(&device->suballoc_transfer);
    pvr_bo_suballocator_fini(&device->suballoc_pds);
    pvr_bo_suballocator_fini(&device->suballoc_general);
+   pvr_bo_cache_finish(device);
    pvr_bo_store_destroy(device);
    pvr_winsys_destroy(device->ws);
    p_atomic_dec(&device->instance->active_device_count);
