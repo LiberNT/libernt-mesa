@@ -154,6 +154,9 @@ struct pvr_device {
    simple_mtx_t bo_cache_mtx;
    struct list_head bo_cache;
    uint32_t bo_cache_count;
+
+   simple_mtx_t load_op_shader_cache_mtx;
+   struct hash_table *load_op_shader_cache;
 };
 
 struct pvr_device_memory {

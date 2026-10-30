@@ -26,6 +26,7 @@
 #include "pvr_instance.h"
 #include "pvr_job_render.h"
 #include "pvr_macros.h"
+#include "pvr_mrt.h"
 #include "pvr_physical_device.h"
 #include "pvr_query.h"
 #include "pvr_queue.h"
@@ -841,6 +842,10 @@ VkResult PVR_PER_ARCH(create_device)(struct pvr_physical_device *pdevice,
    if (result != VK_SUCCESS)
       goto err_pvr_robustness_buffer_finish;
 
+   result = pvr_arch_load_op_shader_cache_init(device);
+   if (result != VK_SUCCESS)
+      goto err_pvr_border_color_table_finish;
+
    /* FIXME: Move this to a later stage and possibly somewhere other than
     * pvr_device. The purpose of this is so that we don't have to get the size
     * on each kick.
@@ -862,6 +867,9 @@ VkResult PVR_PER_ARCH(create_device)(struct pvr_physical_device *pdevice,
    *pDevice = pvr_device_to_handle(device);
 
    return VK_SUCCESS;
+
+err_pvr_border_color_table_finish:
+   pvr_arch_border_color_table_finish(device);
 
 err_pvr_robustness_buffer_finish:
    pvr_robustness_buffer_finish(device);
@@ -946,6 +954,7 @@ void PVR_PER_ARCH(destroy_device)(struct pvr_device *device,
    simple_mtx_destroy(&device->rs_mtx);
 
    pvr_rt_dataset_cache_finish(device);
+   pvr_arch_load_op_shader_cache_finish(device);
 
    pvr_arch_border_color_table_finish(device);
    pvr_robustness_buffer_finish(device);

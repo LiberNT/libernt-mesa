@@ -215,6 +215,16 @@ VkResult
 #   define pvr_arch_load_op_shader_generate \
       PVR_PER_ARCH(load_op_shader_generate)
 
+VkResult PVR_PER_ARCH(load_op_shader_cache_init)(struct pvr_device *device);
+
+#   define pvr_arch_load_op_shader_cache_init \
+      PVR_PER_ARCH(load_op_shader_cache_init)
+
+void PVR_PER_ARCH(load_op_shader_cache_finish)(struct pvr_device *device);
+
+#   define pvr_arch_load_op_shader_cache_finish \
+      PVR_PER_ARCH(load_op_shader_cache_finish)
+
 VkResult PVR_PER_ARCH(mrt_load_ops_setup)(struct pvr_cmd_buffer *cmd_buffer,
                                           const VkAllocationCallbacks *alloc,
                                           struct pvr_load_op_state **state);

@@ -18,6 +18,7 @@
 #include "pvr_physical_device.h"
 
 #include "hwdef/rogue_hw_utils.h"
+#include "util/hash_table.h"
 #include "util/macros.h"
 #include "vulkan/vulkan_core.h"
 #include "vulkan/runtime/vk_graphics_state.h"
@@ -575,19 +576,20 @@ VkResult pvr_arch_pds_unitex_state_program_create_and_upload(
 static VkResult pvr_pds_fragment_program_create_and_upload(
    struct pvr_device *device,
    const VkAllocationCallbacks *allocator,
-   pco_shader *fs,
+   uint32_t entry_offset,
+   uint32_t temps,
+   bool phase_change,
    struct pvr_suballoc_bo *shader_bo,
    struct pvr_pds_upload *pds_frag_prog,
    bool msaa)
 {
    struct pvr_pds_kickusc_program program = { 0 };
-   pco_data *fs_data = pco_shader_data(fs);
    uint32_t staging_buffer_size;
    uint32_t *staging_buffer;
    VkResult result;
 
    const pvr_dev_addr_t exec_addr =
-      PVR_DEV_ADDR_OFFSET(shader_bo->dev_addr, fs_data->common.entry_offset);
+      PVR_DEV_ADDR_OFFSET(shader_bo->dev_addr, entry_offset);
 
    /* Note this is not strictly required to be done before calculating the
     * staging_buffer_size in this particular case. It can also be done after
@@ -595,10 +597,10 @@ static VkResult pvr_pds_fragment_program_create_and_upload(
     */
    pvr_pds_setup_doutu(&program.usc_task_control,
                        exec_addr.addr,
-                       fs_data->common.temps,
+                       temps,
                        msaa ? ROGUE_PDSINST_DOUTU_SAMPLE_RATE_FULL
                             : ROGUE_PDSINST_DOUTU_SAMPLE_RATE_INSTANCE,
-                       fs_data->fs.uses.phase_change);
+                       phase_change);
 
    pvr_pds_kick_usc(&program, NULL, 0, false, PDS_GENERATE_SIZES);
 
@@ -638,6 +640,191 @@ static VkResult pvr_pds_fragment_program_create_and_upload(
    return VK_SUCCESS;
 }
 
+#define PVR_LOAD_OP_SHADER_CACHE_MAX 64U
+
+struct pvr_load_op_shader_key {
+   VkFormat dest_vk_format[PVR_LOAD_OP_CLEARS_LOADS_MAX_RTS];
+   struct {
+      uint32_t type;
+      uint32_t intermediate_size;
+      uint32_t location[2];
+      uint32_t desc_intermediate_size;
+      uint32_t valid_mask[PVR_USC_RENDER_TARGET_MAXIMUM_SIZE_IN_DWORDS];
+      uint32_t priority;
+   } mrt_resources[PVR_LOAD_OP_CLEARS_LOADS_MAX_RTS];
+   uint32_t num_render_targets;
+   uint32_t num_output_regs;
+   uint32_t num_tile_buffers;
+   uint32_t disable_source_pos_override;
+   int32_t depth_clear_to_reg;
+   uint16_t rt_clear_mask;
+   uint16_t rt_load_mask;
+   uint16_t rt_2d_view_3d_mask;
+   uint16_t unresolved_msaa_mask;
+};
+
+struct pvr_load_op_shader {
+   struct pvr_load_op_shader_key key;
+   uint32_t entry_offset;
+   uint32_t temps;
+   bool phase_change;
+   uint32_t num_tile_buffers;
+   uint32_t const_shareds_count;
+   uint32_t shareds_count;
+   uint32_t binary_size;
+   uint8_t binary[];
+};
+
+static uint32_t pvr_load_op_shader_key_hash(const void *key)
+{
+   return _mesa_hash_data(key, sizeof(struct pvr_load_op_shader_key));
+}
+
+static bool pvr_load_op_shader_key_equal(const void *a, const void *b)
+{
+   return !memcmp(a, b, sizeof(struct pvr_load_op_shader_key));
+}
+
+static bool
+pvr_load_op_shader_key_init(const struct pvr_load_op *load_op,
+                            struct pvr_load_op_shader_key *key)
+{
+   const struct usc_mrt_setup *setup = load_op->clears_loads_state.mrt_setup;
+
+   if (setup->num_render_targets > ARRAY_SIZE(key->mrt_resources))
+      return false;
+
+   memset(key, 0, sizeof(*key));
+   memcpy(key->dest_vk_format,
+          load_op->clears_loads_state.dest_vk_format,
+          sizeof(key->dest_vk_format));
+
+   for (uint32_t i = 0; i < setup->num_render_targets; i++) {
+      const struct usc_mrt_resource *resource = &setup->mrt_resources[i];
+
+      key->mrt_resources[i].type = resource->type;
+      key->mrt_resources[i].intermediate_size = resource->intermediate_size;
+      key->mrt_resources[i].location[0] = resource->reg.output_reg;
+      key->mrt_resources[i].location[1] = resource->reg.offset;
+      key->mrt_resources[i].desc_intermediate_size =
+         resource->mrt_desc.intermediate_size;
+      memcpy(key->mrt_resources[i].valid_mask,
+             resource->mrt_desc.valid_mask,
+             sizeof(key->mrt_resources[i].valid_mask));
+      key->mrt_resources[i].priority = resource->mrt_desc.priority;
+   }
+
+   key->num_render_targets = setup->num_render_targets;
+   key->num_output_regs = setup->num_output_regs;
+   key->num_tile_buffers = setup->num_tile_buffers;
+   key->disable_source_pos_override = setup->disable_source_pos_override;
+   key->depth_clear_to_reg = load_op->clears_loads_state.depth_clear_to_reg;
+   key->rt_clear_mask = load_op->clears_loads_state.rt_clear_mask;
+   key->rt_load_mask = load_op->clears_loads_state.rt_load_mask;
+   key->rt_2d_view_3d_mask = load_op->clears_loads_state.rt_2d_view_3d_mask;
+   key->unresolved_msaa_mask = load_op->clears_loads_state.unresolved_msaa_mask;
+
+   return true;
+}
+
+static struct pvr_load_op_shader *
+pvr_load_op_shader_compile(struct pvr_device *device,
+                           const struct pvr_load_op_shader_key *key,
+                           struct pvr_load_op *load_op)
+{
+   pco_shader *loadop = pvr_uscgen_loadop(device->pdevice->pco_ctx, load_op);
+   const uint32_t binary_size = pco_shader_binary_size(loadop);
+   struct pvr_load_op_shader *shader;
+
+   shader = vk_alloc(&device->vk.alloc,
+                     sizeof(*shader) + binary_size,
+                     8,
+                     VK_SYSTEM_ALLOCATION_SCOPE_DEVICE);
+   if (shader) {
+      shader->key = *key;
+      shader->entry_offset = pco_shader_data(loadop)->common.entry_offset;
+      shader->temps = pco_shader_data(loadop)->common.temps;
+      shader->phase_change = pco_shader_data(loadop)->fs.uses.phase_change;
+      shader->num_tile_buffers = load_op->num_tile_buffers;
+      shader->const_shareds_count = load_op->const_shareds_count;
+      shader->shareds_count = load_op->shareds_count;
+      shader->binary_size = binary_size;
+      memcpy(shader->binary, pco_shader_binary_data(loadop), binary_size);
+   }
+
+   ralloc_free(loadop);
+
+   return shader;
+}
+
+static struct pvr_load_op_shader *
+pvr_load_op_shader_get(struct pvr_device *device,
+                       struct pvr_load_op *load_op,
+                       bool *owned)
+{
+   struct pvr_load_op_shader_key key;
+   struct pvr_load_op_shader *shader;
+   struct hash_entry *entry;
+
+   *owned = true;
+   if (!pvr_load_op_shader_key_init(load_op, &key)) {
+      memset(&key, 0, sizeof(key));
+      return pvr_load_op_shader_compile(device, &key, load_op);
+   }
+
+   simple_mtx_lock(&device->load_op_shader_cache_mtx);
+   entry = _mesa_hash_table_search(device->load_op_shader_cache, &key);
+   simple_mtx_unlock(&device->load_op_shader_cache_mtx);
+
+   if (entry) {
+      shader = entry->data;
+      load_op->num_tile_buffers = shader->num_tile_buffers;
+      load_op->const_shareds_count = shader->const_shareds_count;
+      load_op->shareds_count = shader->shareds_count;
+      *owned = false;
+      return shader;
+   }
+
+   shader = pvr_load_op_shader_compile(device, &key, load_op);
+   if (!shader)
+      return NULL;
+
+   simple_mtx_lock(&device->load_op_shader_cache_mtx);
+   if (device->load_op_shader_cache->entries < PVR_LOAD_OP_SHADER_CACHE_MAX &&
+       !_mesa_hash_table_search(device->load_op_shader_cache, &shader->key)) {
+      _mesa_hash_table_insert(device->load_op_shader_cache,
+                              &shader->key,
+                              shader);
+      *owned = false;
+   }
+   simple_mtx_unlock(&device->load_op_shader_cache_mtx);
+
+   return shader;
+}
+
+VkResult PVR_PER_ARCH(load_op_shader_cache_init)(struct pvr_device *device)
+{
+   device->load_op_shader_cache =
+      _mesa_hash_table_create(NULL,
+                              pvr_load_op_shader_key_hash,
+                              pvr_load_op_shader_key_equal);
+   if (!device->load_op_shader_cache)
+      return vk_error(device, VK_ERROR_OUT_OF_HOST_MEMORY);
+
+   simple_mtx_init(&device->load_op_shader_cache_mtx, mtx_plain);
+
+   return VK_SUCCESS;
+}
+
+void PVR_PER_ARCH(load_op_shader_cache_finish)(struct pvr_device *device)
+{
+   hash_table_foreach (device->load_op_shader_cache, entry)
+      vk_free(&device->vk.alloc, entry->data);
+
+   _mesa_hash_table_destroy(device->load_op_shader_cache, NULL);
+   simple_mtx_destroy(&device->load_op_shader_cache_mtx);
+}
+
 VkResult
 pvr_arch_load_op_shader_generate(struct pvr_device *device,
                                  const VkAllocationCallbacks *allocator,
@@ -645,17 +832,22 @@ pvr_arch_load_op_shader_generate(struct pvr_device *device,
 {
    const struct pvr_device_info *dev_info = &device->pdevice->dev_info;
    const uint32_t cache_line_size = pvr_get_slc_cache_line_size(dev_info);
+   struct pvr_load_op_shader *shader;
+   bool owned;
 
-   pco_shader *loadop = pvr_uscgen_loadop(device->pdevice->pco_ctx, load_op);
+   shader = pvr_load_op_shader_get(device, load_op, &owned);
+   if (!shader)
+      return vk_error(device, VK_ERROR_OUT_OF_HOST_MEMORY);
 
    VkResult result = pvr_gpu_upload_usc(device,
-                                        pco_shader_binary_data(loadop),
-                                        pco_shader_binary_size(loadop),
+                                        shader->binary,
+                                        shader->binary_size,
                                         cache_line_size,
                                         &load_op->usc_frag_prog_bo);
 
    if (result != VK_SUCCESS) {
-      ralloc_free(loadop);
+      if (owned)
+         vk_free(&device->vk.alloc, shader);
       return result;
    }
 
@@ -665,13 +857,16 @@ pvr_arch_load_op_shader_generate(struct pvr_device *device,
    result =
       pvr_pds_fragment_program_create_and_upload(device,
                                                  allocator,
-                                                 loadop,
+                                                 shader->entry_offset,
+                                                 shader->temps,
+                                                 shader->phase_change,
                                                  load_op->usc_frag_prog_bo,
                                                  &load_op->pds_frag_prog,
                                                  msaa);
 
-   load_op->temps_count = pco_shader_data(loadop)->common.temps;
-   ralloc_free(loadop);
+   load_op->temps_count = shader->temps;
+   if (owned)
+      vk_free(&device->vk.alloc, shader);
 
    if (result != VK_SUCCESS)
       goto err_free_usc_frag_prog_bo;
