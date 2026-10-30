@@ -41,6 +41,7 @@
 #include "pipe/p_state.h"
 #include "util/driconf.h"
 #include "util/log.h"
+#include "util/streaming-load-memcpy.h"
 #include "util/u_inlines.h"
 #include "util/u_memory.h"
 #include "util/xmlconfig.h"
@@ -58,8 +59,23 @@
 
 typedef NTSTATUS (NTAPI *PFN_NT_COMPARE_OBJECTS)(HANDLE, HANDLE);
 
+/* The descriptor dwmapi stores as the private runtime data of a window's
+ * shared surface (sdk/include/reactos/dwmframe.h in LiberNT).
+ */
+struct cd3d_shared_info {
+   uint32_t magic;
+   uint32_t version;
+   uint32_t width;
+   uint32_t height;
+   uint32_t pitch;
+   uint32_t format;
+};
+
+#define CD3D_SHARED_INFO_MAGIC 0x53585744u
+
 struct cd3d_bo {
    D3DKMT_HANDLE allocation;
+   D3DKMT_HANDLE resource;
    uint32_t size;
    void *map;
    uint32_t tiling_mode;
@@ -271,17 +287,28 @@ cd3d_wait_fence(struct cd3d_device *dev, uint64_t value, int64_t timeout_ns)
 }
 
 static void
+cd3d_bo_destroy(struct cd3d_device *dev, struct cd3d_bo *bo)
+{
+   D3DKMT_DESTROYALLOCATION destroy = { 0 };
+
+   destroy.hDevice = dev->device;
+   if (bo->resource) {
+      destroy.hResource = bo->resource;
+   } else {
+      destroy.AllocationCount = 1;
+      destroy.phAllocationList = &bo->allocation;
+   }
+   D3DKMTDestroyAllocation(&destroy);
+}
+
+static void
 cd3d_device_destroy(struct cd3d_device *dev)
 {
    for (uint32_t i = 0; i < dev->bo_capacity; i++) {
       struct cd3d_bo *bo = &dev->bos[i];
       if (bo->allocation == 0)
          continue;
-      D3DKMT_DESTROYALLOCATION destroy = { 0 };
-      destroy.hDevice = dev->device;
-      destroy.AllocationCount = 1;
-      destroy.phAllocationList = &bo->allocation;
-      D3DKMTDestroyAllocation(&destroy);
+      cd3d_bo_destroy(dev, bo);
    }
    if (dev->fence_object) {
       D3DKMT_DESTROYSYNCHRONIZATIONOBJECT destroy = { dev->fence_object };
@@ -591,12 +618,77 @@ cd3d_gem_close(struct cd3d_device *dev, struct drm_gem_close *close)
       unlock.hAllocation = bo->allocation;
       D3DKMTUnlock2(&unlock);
    }
-   D3DKMT_DESTROYALLOCATION destroy = { 0 };
-   destroy.hDevice = dev->device;
-   destroy.AllocationCount = 1;
-   destroy.phAllocationList = &bo->allocation;
-   D3DKMTDestroyAllocation(&destroy);
+   cd3d_bo_destroy(dev, bo);
    memset(bo, 0, sizeof(*bo));
+   return 0;
+}
+
+static bool
+cd3d_query_shared(struct cd3d_device *dev, uint32_t global_share,
+                  D3DKMT_QUERYRESOURCEINFO *query,
+                  struct cd3d_shared_info *info)
+{
+   memset(query, 0, sizeof(*query));
+   memset(info, 0, sizeof(*info));
+   query->hDevice = dev->device;
+   query->hGlobalShare = global_share;
+   query->pPrivateRuntimeData = info;
+   query->PrivateRuntimeDataSize = sizeof(*info);
+   return NT_SUCCESS(D3DKMTQueryResourceInfo(query)) &&
+          query->NumAllocations == 1 &&
+          query->PrivateRuntimeDataSize == sizeof(*info) &&
+          info->magic == CD3D_SHARED_INFO_MAGIC;
+}
+
+/* A "flink" name is a D3DKMT global share handle. */
+static int
+cd3d_gem_open(struct cd3d_device *dev, struct drm_gem_open *open)
+{
+   D3DKMT_QUERYRESOURCEINFO query;
+   struct cd3d_shared_info info;
+
+   if (!cd3d_query_shared(dev, open->name, &query, &info))
+      return ENOENT;
+
+   uint32_t handle = cd3d_bo_slot(dev);
+   if (!handle)
+      return ENOMEM;
+
+   void *resource_data = calloc(1, query.ResourcePrivateDriverDataSize + 1);
+   void *total_data = calloc(1, query.TotalPrivateDriverDataSize + 1);
+   if (!resource_data || !total_data) {
+      free(resource_data);
+      free(total_data);
+      return ENOMEM;
+   }
+
+   D3DDDI_OPENALLOCATIONINFO allocation = { 0 };
+   D3DKMT_OPENRESOURCE resource = { 0 };
+   resource.hDevice = dev->device;
+   resource.hGlobalShare = open->name;
+   resource.NumAllocations = 1;
+   resource.pOpenAllocationInfo = &allocation;
+   resource.pPrivateRuntimeData = &info;
+   resource.PrivateRuntimeDataSize = sizeof(info);
+   resource.pResourcePrivateDriverData = resource_data;
+   resource.ResourcePrivateDriverDataSize = query.ResourcePrivateDriverDataSize;
+   resource.pTotalPrivateDriverDataBuffer = total_data;
+   resource.TotalPrivateDriverDataBufferSize = query.TotalPrivateDriverDataSize;
+   NTSTATUS status = D3DKMTOpenResource(&resource);
+   free(resource_data);
+   free(total_data);
+   if (!NT_SUCCESS(status)) {
+      mesa_loge("crocus: D3DKMTOpenResource failed: 0x%08lx", status);
+      return cd3d_errno(status);
+   }
+
+   struct cd3d_bo *bo = &dev->bos[handle - 1];
+   memset(bo, 0, sizeof(*bo));
+   bo->allocation = allocation.hAllocation;
+   bo->resource = resource.hResource;
+   bo->size = info.pitch * info.height;
+   open->handle = handle;
+   open->size = bo->size;
    return 0;
 }
 
@@ -861,10 +953,13 @@ cd3d_execbuffer2(struct cd3d_device *dev, struct drm_i915_gem_execbuffer2 *exec)
    header.StateOffset = state_offset;
    header.StateLength = state_length;
    memcpy(dev->command_buffer, &header, sizeof(header));
-   memcpy(dev->command_buffer + CD3D_BATCH_OFFSET,
-          (const uint8_t *)batch_map + exec->batch_start_offset, exec->batch_len);
+   /* Both buffers are write-combined. */
+   util_streaming_load_memcpy(dev->command_buffer + CD3D_BATCH_OFFSET,
+                              (uint8_t *)batch_map + exec->batch_start_offset,
+                              exec->batch_len);
    if (state)
-      memcpy(dev->command_buffer + state_offset, state_map, state_length);
+      util_streaming_load_memcpy(dev->command_buffer + state_offset, state_map,
+                                 state_length);
 
    for (uint32_t pass = 0; pass < 2; pass++) {
       uint32_t source = pass == 0 ? batch_index : state_index;
@@ -1022,6 +1117,8 @@ cd3d_ioctl_locked(struct cd3d_device *dev, unsigned long request, void *arg)
    }
    case DRM_IOCTL_I915_GEM_CREATE:
       return cd3d_gem_create(dev, arg);
+   case DRM_IOCTL_GEM_OPEN:
+      return cd3d_gem_open(dev, arg);
    case DRM_IOCTL_GEM_CLOSE:
       return cd3d_gem_close(dev, arg);
    case DRM_IOCTL_I915_GEM_SET_DOMAIN:
@@ -1107,6 +1204,23 @@ crocus_d3dkmt_screen_create(void)
       _close(fd);
    }
    return screen;
+}
+
+bool
+crocus_d3dkmt_shared_surface_info(struct pipe_screen *screen, uintptr_t handle,
+                                  uint32_t *width, uint32_t *height,
+                                  uint32_t *pitch)
+{
+   struct cd3d_device *dev = cd3d_lookup(((struct crocus_screen *)screen)->fd);
+   D3DKMT_QUERYRESOURCEINFO query;
+   struct cd3d_shared_info info;
+
+   if (!dev || !cd3d_query_shared(dev, (uint32_t)handle, &query, &info))
+      return false;
+   *width = info.width;
+   *height = info.height;
+   *pitch = info.pitch;
+   return true;
 }
 
 void

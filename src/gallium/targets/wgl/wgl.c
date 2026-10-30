@@ -104,7 +104,7 @@ static const char *created_driver_name = NULL;
 
 static bool wgl_can_compose(void);
 
-#if defined(GALLIUM_VC4) || defined(GALLIUM_V3D)
+#if defined(GALLIUM_VC4) || defined(GALLIUM_V3D) || defined(GALLIUM_CROCUS)
 struct stw_shared_surface {
    struct pipe_resource *resource;
 };
@@ -342,7 +342,7 @@ wgl_get_name(void)
    return created_driver_name;
 }
 
-#if defined(GALLIUM_VC4) || defined(GALLIUM_V3D)
+#if defined(GALLIUM_VC4) || defined(GALLIUM_V3D) || defined(GALLIUM_CROCUS)
 static struct stw_shared_surface *
 wgl_shared_surface_open(struct pipe_screen *screen,
                         HANDLE shared_handle,
@@ -392,6 +392,25 @@ wgl_shared_surface_open(struct pipe_screen *screen,
          return NULL;
       }
       templ.format = PIPE_FORMAT_B8G8R8A8_UNORM;
+      whandle.stride = shared_pitch;
+   }
+#endif
+#ifdef GALLIUM_CROCUS
+   if (use_crocus) {
+      uint32_t shared_width, shared_height, shared_pitch;
+
+      /* A window with a frame shares its whole GDI surface, not its client. */
+      if (!crocus_d3dkmt_shared_surface_info(screen,
+                                             (uintptr_t)shared_handle,
+                                             &shared_width, &shared_height,
+                                             &shared_pitch) ||
+          shared_width < width || shared_height < height) {
+         FREE(surface);
+         return NULL;
+      }
+      templ.format = PIPE_FORMAT_B8G8R8A8_UNORM;
+      templ.width0 = shared_width;
+      templ.height0 = shared_height;
       whandle.stride = shared_pitch;
    }
 #endif
@@ -465,6 +484,30 @@ wgl_compose(struct pipe_screen *screen,
       blit.dst.resource = dest->resource;
       blit.dst.format = dest->resource->format;
       blit.dst.box = box;
+      blit.mask = PIPE_MASK_RGBA;
+      blit.filter = PIPE_TEX_FILTER_NEAREST;
+      context->blit(context, &blit);
+   } else
+#endif
+#ifdef GALLIUM_CROCUS
+   if (use_crocus) {
+      struct pipe_blit_info blit = { 0 };
+      bool whole = dest->resource->width0 == (unsigned)(rect->right - rect->left) &&
+                   dest->resource->height0 == (unsigned)(rect->bottom - rect->top);
+      unsigned x = whole ? 0 : rect->left, y = whole ? 0 : rect->top;
+
+      if (x >= dest->resource->width0 || y >= dest->resource->height0)
+         return false;
+      box.width = MIN2(box.width, (int)(dest->resource->width0 - x));
+      box.height = MIN2(box.height, (int)(dest->resource->height0 - y));
+      blit.src.resource = source;
+      blit.src.format = PIPE_FORMAT_B8G8R8X8_UNORM;
+      blit.src.box = box;
+      blit.dst.resource = dest->resource;
+      blit.dst.format = dest->resource->format;
+      blit.dst.box = box;
+      blit.dst.box.x = x;
+      blit.dst.box.y = y;
       blit.mask = PIPE_MASK_RGBA;
       blit.filter = PIPE_TEX_FILTER_NEAREST;
       context->blit(context, &blit);
@@ -567,6 +610,10 @@ wgl_can_compose(void)
    if (use_v3d)
       return true;
 #endif
+#ifdef GALLIUM_CROCUS
+   if (use_crocus)
+      return true;
+#endif
    return false;
 }
 
@@ -578,7 +625,7 @@ static struct stw_winsys stw_winsys = {
 #else
    NULL, /* get_adapter_luid */
 #endif
-#if defined(GALLIUM_VC4) || defined(GALLIUM_V3D)
+#if defined(GALLIUM_VC4) || defined(GALLIUM_V3D) || defined(GALLIUM_CROCUS)
    &wgl_shared_surface_open,
    &wgl_shared_surface_close,
    &wgl_compose,
