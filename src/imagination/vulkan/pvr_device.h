@@ -157,6 +157,9 @@ struct pvr_device {
 
    simple_mtx_t load_op_shader_cache_mtx;
    struct hash_table *load_op_shader_cache;
+
+   simple_mtx_t eot_shader_cache_mtx;
+   struct hash_table *eot_shader_cache;
 };
 
 struct pvr_device_memory {

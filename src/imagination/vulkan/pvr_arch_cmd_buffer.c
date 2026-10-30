@@ -63,6 +63,7 @@
 #include "pvr_types.h"
 #include "pvr_usc.h"
 #include "pvr_winsys.h"
+#include "util/hash_table.h"
 #include "util/bitscan.h"
 #include "util/bitset.h"
 #include "util/compiler.h"
@@ -530,6 +531,130 @@ pvr_cmd_buffer_upload_pds_data(struct pvr_cmd_buffer *const cmd_buffer,
                                          pds_upload_out);
 }
 
+#define PVR_EOT_SHADER_CACHE_MAX 64U
+
+struct pvr_eot_shader_key {
+   uint32_t emit_count;
+   uint32_t num_output_regs;
+   uint32_t msaa_samples;
+   uint32_t state_words[PVR_MAX_COLOR_ATTACHMENTS][2];
+   uint64_t tile_buffer_addrs[PVR_MAX_COLOR_ATTACHMENTS];
+};
+
+struct pvr_eot_shader {
+   struct pvr_eot_shader_key key;
+   uint32_t temps;
+   uint32_t binary_size;
+   uint8_t binary[];
+};
+
+static uint32_t pvr_eot_shader_key_hash(const void *key)
+{
+   return _mesa_hash_data(key, sizeof(struct pvr_eot_shader_key));
+}
+
+static bool pvr_eot_shader_key_equal(const void *a, const void *b)
+{
+   return !memcmp(a, b, sizeof(struct pvr_eot_shader_key));
+}
+
+static struct pvr_eot_shader *
+pvr_eot_shader_compile(struct pvr_device *device,
+                       const struct pvr_eot_shader_key *key,
+                       struct pvr_eot_props *props)
+{
+   pco_shader *eot =
+      pvr_usc_eot(device->pdevice->pco_ctx, props, &device->pdevice->dev_info);
+   const uint32_t binary_size = pco_shader_binary_size(eot);
+   struct pvr_eot_shader *shader;
+
+   shader = vk_alloc(&device->vk.alloc,
+                     sizeof(*shader) + binary_size,
+                     8,
+                     VK_SYSTEM_ALLOCATION_SCOPE_DEVICE);
+   if (shader) {
+      shader->key = *key;
+      shader->temps = pco_shader_data(eot)->common.temps;
+      shader->binary_size = binary_size;
+      memcpy(shader->binary, pco_shader_binary_data(eot), binary_size);
+   }
+
+   ralloc_free(eot);
+
+   return shader;
+}
+
+static struct pvr_eot_shader *pvr_eot_shader_get(struct pvr_device *device,
+                                                 struct pvr_eot_props *props,
+                                                 bool *owned)
+{
+   struct pvr_eot_shader_key key;
+   struct pvr_eot_shader *shader;
+   struct hash_entry *entry;
+
+   memset(&key, 0, sizeof(key));
+   *owned = true;
+   if (props->shared_words || props->emit_count > ARRAY_SIZE(key.state_words))
+      return pvr_eot_shader_compile(device, &key, props);
+
+   key.emit_count = props->emit_count;
+   key.num_output_regs = props->num_output_regs;
+   key.msaa_samples = props->msaa_samples;
+   for (uint32_t u = 0; u < props->emit_count; u++) {
+      key.state_words[u][0] =
+         props->state_words[u * ROGUE_NUM_PBESTATE_STATE_WORDS];
+      key.state_words[u][1] =
+         props->state_words[u * ROGUE_NUM_PBESTATE_STATE_WORDS + 1];
+      key.tile_buffer_addrs[u] = props->tile_buffer_addrs[u];
+   }
+
+   simple_mtx_lock(&device->eot_shader_cache_mtx);
+   entry = _mesa_hash_table_search(device->eot_shader_cache, &key);
+   simple_mtx_unlock(&device->eot_shader_cache_mtx);
+
+   if (entry) {
+      *owned = false;
+      return entry->data;
+   }
+
+   shader = pvr_eot_shader_compile(device, &key, props);
+   if (!shader)
+      return NULL;
+
+   simple_mtx_lock(&device->eot_shader_cache_mtx);
+   if (device->eot_shader_cache->entries < PVR_EOT_SHADER_CACHE_MAX &&
+       !_mesa_hash_table_search(device->eot_shader_cache, &shader->key)) {
+      _mesa_hash_table_insert(device->eot_shader_cache, &shader->key, shader);
+      *owned = false;
+   }
+   simple_mtx_unlock(&device->eot_shader_cache_mtx);
+
+   return shader;
+}
+
+VkResult PVR_PER_ARCH(eot_shader_cache_init)(struct pvr_device *device)
+{
+   device->eot_shader_cache =
+      _mesa_hash_table_create(NULL,
+                              pvr_eot_shader_key_hash,
+                              pvr_eot_shader_key_equal);
+   if (!device->eot_shader_cache)
+      return vk_error(device, VK_ERROR_OUT_OF_HOST_MEMORY);
+
+   simple_mtx_init(&device->eot_shader_cache_mtx, mtx_plain);
+
+   return VK_SUCCESS;
+}
+
+void PVR_PER_ARCH(eot_shader_cache_finish)(struct pvr_device *device)
+{
+   hash_table_foreach (device->eot_shader_cache, entry)
+      vk_free(&device->vk.alloc, entry->data);
+
+   _mesa_hash_table_destroy(device->eot_shader_cache, NULL);
+   simple_mtx_destroy(&device->eot_shader_cache_mtx);
+}
+
 /* pbe_cs_words must be an array of length emit_count with
  * ROGUE_NUM_PBESTATE_STATE_WORDS entries
  */
@@ -559,7 +684,8 @@ static VkResult pvr_sub_cmd_gfx_per_job_fragment_programs_create_and_upload(
    };
    uint32_t *staging_buffer;
    uint32_t usc_temp_count;
-   pco_shader *eot;
+   struct pvr_eot_shader *eot;
+   bool eot_owned;
    VkResult result;
 
    bool has_tile_buffers = false;
@@ -583,17 +709,20 @@ static VkResult pvr_sub_cmd_gfx_per_job_fragment_programs_create_and_upload(
          props.msaa_samples = 1;
    }
 
-   eot =
-      pvr_usc_eot(device->pdevice->pco_ctx, &props, &device->pdevice->dev_info);
-   usc_temp_count = pco_shader_data(eot)->common.temps;
+   eot = pvr_eot_shader_get(device, &props, &eot_owned);
+   if (!eot)
+      return vk_error(device, VK_ERROR_OUT_OF_HOST_MEMORY);
+
+   usc_temp_count = eot->temps;
 
    result = pvr_cmd_buffer_upload_usc(cmd_buffer,
-                                      pco_shader_binary_data(eot),
-                                      pco_shader_binary_size(eot),
+                                      eot->binary,
+                                      eot->binary_size,
                                       4,
                                       &usc_eot_program);
 
-   ralloc_free(eot);
+   if (eot_owned)
+      vk_free(&device->vk.alloc, eot);
 
    if (result != VK_SUCCESS)
       return result;

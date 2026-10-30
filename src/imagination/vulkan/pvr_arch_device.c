@@ -20,6 +20,7 @@
 
 #include "pvr_border.h"
 #include "pvr_clear.h"
+#include "pvr_cmd_buffer.h"
 #include "pvr_entrypoints.h"
 #include "pvr_framebuffer.h"
 #include "pvr_free_list.h"
@@ -846,6 +847,10 @@ VkResult PVR_PER_ARCH(create_device)(struct pvr_physical_device *pdevice,
    if (result != VK_SUCCESS)
       goto err_pvr_border_color_table_finish;
 
+   result = pvr_arch_eot_shader_cache_init(device);
+   if (result != VK_SUCCESS)
+      goto err_pvr_load_op_shader_cache_finish;
+
    /* FIXME: Move this to a later stage and possibly somewhere other than
     * pvr_device. The purpose of this is so that we don't have to get the size
     * on each kick.
@@ -867,6 +872,9 @@ VkResult PVR_PER_ARCH(create_device)(struct pvr_physical_device *pdevice,
    *pDevice = pvr_device_to_handle(device);
 
    return VK_SUCCESS;
+
+err_pvr_load_op_shader_cache_finish:
+   pvr_arch_load_op_shader_cache_finish(device);
 
 err_pvr_border_color_table_finish:
    pvr_arch_border_color_table_finish(device);
@@ -955,6 +963,7 @@ void PVR_PER_ARCH(destroy_device)(struct pvr_device *device,
 
    pvr_rt_dataset_cache_finish(device);
    pvr_arch_load_op_shader_cache_finish(device);
+   pvr_arch_eot_shader_cache_finish(device);
 
    pvr_arch_border_color_table_finish(device);
    pvr_robustness_buffer_finish(device);

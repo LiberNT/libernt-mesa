@@ -763,6 +763,15 @@ struct pvr_renderpass_hwsetup_render *PVR_PER_ARCH(pass_info_get_hw_render)(
 #   define pvr_arch_pass_info_get_hw_render \
       PVR_PER_ARCH(pass_info_get_hw_render)
 
+VkResult PVR_PER_ARCH(eot_shader_cache_init)(struct pvr_device *device);
+
+#   define pvr_arch_eot_shader_cache_init PVR_PER_ARCH(eot_shader_cache_init)
+
+void PVR_PER_ARCH(eot_shader_cache_finish)(struct pvr_device *device);
+
+#   define pvr_arch_eot_shader_cache_finish \
+      PVR_PER_ARCH(eot_shader_cache_finish)
+
 #endif /* PVR_PER_ARCH */
 
 #endif /* PVR_CMD_BUFFER_H */
