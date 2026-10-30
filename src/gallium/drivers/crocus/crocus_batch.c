@@ -1002,6 +1002,14 @@ _crocus_batch_flush(struct crocus_batch *batch, const char *file, int line)
    /* Start a new batch buffer. */
    crocus_batch_reset(batch);
 
+   /* Gen6+ state is otherwise left to the kernel's hardware context.  Without
+    * one, the GPU holds whatever the last batch left there, which may be
+    * another context's, or this context's other pipeline.
+    */
+   if (ret == 0 && batch->screen->devinfo.ver >= 6 &&
+       !batch->screen->devinfo.has_context_isolation)
+      crocus_lost_context_state(batch);
+
    /* EIO means our context is banned.  In this case, try and replace it
     * with a new logical context, and inform crocus_context that all state
     * has been lost and needs to be re-initialized.  If this succeeds,
