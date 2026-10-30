@@ -32,6 +32,11 @@ enum intel_kmd_type
 intel_get_kmd_type(int fd)
 {
    enum intel_kmd_type type = INTEL_KMD_TYPE_INVALID;
+
+   /* A userspace transport without a DRM node answers only as i915. */
+   if (is_intel_virtio_fd(fd))
+      return INTEL_KMD_TYPE_I915;
+
    drmVersionPtr version = drmGetVersion(fd);
 
    if (!version)
