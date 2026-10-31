@@ -431,10 +431,12 @@ isl_genX(emit_depth_stencil_hiz_s)(const struct isl_device *dev, void *batch,
          break;
       }
       case ISL_FORMAT_R24_UNORM_X8_TYPELESS:
-         clear.DepthClearValue = info->depth_clear_value * ((1u << 24) - 1);
+         clear.DepthClearValue =
+            (double)info->depth_clear_value * ((1u << 24) - 1) + 0.5;
          break;
       case ISL_FORMAT_R16_UNORM:
-         clear.DepthClearValue = info->depth_clear_value * ((1u << 16) - 1);
+         clear.DepthClearValue =
+            (double)info->depth_clear_value * ((1u << 16) - 1) + 0.5;
          break;
       default:
          UNREACHABLE("Invalid depth type");
