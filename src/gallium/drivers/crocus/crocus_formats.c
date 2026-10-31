@@ -450,8 +450,8 @@ crocus_is_format_supported(struct pipe_screen *pscreen,
    if (format == ISL_FORMAT_UNSUPPORTED)
       return false;
 
-   /* no stencil texturing prior to haswell */
-   if (devinfo->verx10 < 75) {
+   /* Gen7 samples stencil from an R8 shadow copy, see crocus_update_stencil_shadow. */
+   if (devinfo->ver < 7) {
       if (pformat == PIPE_FORMAT_S8_UINT ||
           pformat == PIPE_FORMAT_X24S8_UINT ||
           pformat == PIPE_FORMAT_S8X24_UINT ||
