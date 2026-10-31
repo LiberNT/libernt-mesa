@@ -1977,6 +1977,12 @@ try_pbo_download(struct st_context *st,
    if (texture->nr_samples > 1)
       return false;
 
+   /* The shader converts float texels to its 32-bit working format and back,
+    * which quiets NaNs. A read in the stored format has to keep every bit.
+    */
+   if (src_format == dst_format && util_format_is_float(src_format))
+      return false;
+
    /* GetTexImage only returns a single face for cubemaps. */
    if (gl_target == GL_TEXTURE_CUBE_MAP) {
       gl_target = GL_TEXTURE_2D;
