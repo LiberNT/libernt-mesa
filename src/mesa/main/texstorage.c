@@ -173,6 +173,10 @@ initialize_texture_fields(struct gl_context *ctx,
                                    levelWidth, levelHeight, levelDepth,
                                    &levelWidth, &levelHeight, &levelDepth);
    }
+   /* only apply depthMode swizzle if it was explicitly changed */
+   GLenum depth_mode = _mesa_is_desktop_gl_core(ctx) ? GL_RED : GL_LUMINANCE;
+   if (texObj->Attrib.DepthMode != depth_mode)
+      _mesa_update_teximage_format_swizzle(ctx, _mesa_base_tex_image(texObj), texObj->Attrib.DepthMode);
    _mesa_update_texture_object_swizzle(ctx, texObj);
    return GL_TRUE;
 }
