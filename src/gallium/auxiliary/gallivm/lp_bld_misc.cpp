@@ -516,6 +516,8 @@ lp_build_create_jit_compiler_for_module(LLVMExecutionEngineRef *OutJIT,
     LLVMSetTarget(M, "i686-pc-win32-elf");
 #  elif DETECT_ARCH_AARCH64
     LLVMSetTarget(M, "aarch64-pc-win32-elf");
+#  elif defined(__REACTOS__) && DETECT_ARCH_RISCV64
+    LLVMSetTarget(M, "riscv64-pc-win32-elf");
 #  else
 #    error Unsupported architecture for MCJIT on Windows.
 #  endif

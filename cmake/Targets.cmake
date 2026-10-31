@@ -1628,13 +1628,17 @@ if(MESA_LLVMPIPE)
         "${PROJECT_SOURCE_DIR}/src/gallium/auxiliary/draw/draw_pt_fetch_shade_pipeline_llvm.c"
         "${PROJECT_SOURCE_DIR}/src/gallium/auxiliary/draw/draw_vs_llvm.c"
         "${PROJECT_SOURCE_DIR}/src/gallium/auxiliary/nir/nir_to_tgsi_info.c"
-        "${PROJECT_SOURCE_DIR}/src/gallium/auxiliary/gallivm/lp_bld_init.c"
         "${PROJECT_BINARY_DIR}/src/gallium/auxiliary/lp_bld_nir_no_integer_algebraic.c"
         "${PROJECT_SOURCE_DIR}/src/gallium/auxiliary/gallivm/lp_bld_debug.cpp"
         "${PROJECT_SOURCE_DIR}/src/gallium/auxiliary/gallivm/lp_bld_misc.cpp"
         "${PROJECT_SOURCE_DIR}/src/gallium/auxiliary/tessellator/tessellator.cpp"
         "${PROJECT_SOURCE_DIR}/src/gallium/auxiliary/tessellator/p_tessellator.cpp"
     )
+    if(MESA_GALLIVM_ORCJIT)
+        target_sources(gallium PRIVATE "${PROJECT_SOURCE_DIR}/src/gallium/auxiliary/gallivm/lp_bld_init_orc.cpp")
+    else()
+        target_sources(gallium PRIVATE "${PROJECT_SOURCE_DIR}/src/gallium/auxiliary/gallivm/lp_bld_init.c")
+    endif()
 endif()
 target_include_directories(gallium PRIVATE
     "${PROJECT_BINARY_DIR}/src/gallium/auxiliary"

@@ -339,6 +339,9 @@ LPJit::LPJit() :jit_dylib_count(0) {
    lljit = ExitOnErr(
       LLJITBuilder()
          .setJITTargetMachineBuilder(std::move(JTMB))
+#if defined(__REACTOS__) && DETECT_ARCH_RISCV64 == 1
+         .setPlatformSetUp(setUpInactivePlatform)
+#endif
 #ifdef USE_JITLINK
          .setObjectLinkingLayerCreator(
 #if LLVM_VERSION_MAJOR >= 21
@@ -388,6 +391,8 @@ llvm::orc::JITTargetMachineBuilder LPJit::create_jtdb() {
 #  else
    JITTargetMachineBuilder JTMB((Triple("i686-pc-win32-elf")));
 #  endif
+#elif defined(__REACTOS__) && DETECT_ARCH_RISCV64 == 1
+   JITTargetMachineBuilder JTMB((Triple("riscv64-pc-win32-elf")));
 #else
    /*
     * llvm::sys::getProcessTriple() is bogus. It returns the host LLVM was
