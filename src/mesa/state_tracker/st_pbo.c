@@ -486,7 +486,9 @@ create_fs(struct st_context *st, bool download,
                nir_variable_create(b.shader, nir_var_uniform,
                                    glsl_int_type(), "layer_offset");
             b.shader->num_uniforms += 1;
-            layer_offset_var->data.driver_location = 4;
+            /* Units follow st_nir_lower_uniforms: dwords when packed, vec4s otherwise. */
+            layer_offset_var->data.driver_location =
+               st->ctx->Const.PackedDriverUniformStorage ? 4 : 1;
             nir_def *layer_offset = nir_load_var(&b, layer_offset_var);
 
             src_layer = nir_iadd(&b, layer, layer_offset);
