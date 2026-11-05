@@ -48,6 +48,29 @@ lower_vs_vertex_conversion_filter(const nir_instr *instr, const void *options)
          (get_input_target_format(var, options) != PIPE_FORMAT_NONE);
 }
 
+/* The element is fetched as an integer: not every D3D12 keeps the bits unchanged for an input declared as float. */
+static enum glsl_base_type
+get_emulated_input_base_type(enum pipe_format fmt)
+{
+   switch (fmt) {
+   case PIPE_FORMAT_R10G10B10A2_SNORM:
+   case PIPE_FORMAT_R10G10B10A2_SSCALED:
+   case PIPE_FORMAT_R10G10B10A2_USCALED:
+   case PIPE_FORMAT_B10G10R10A2_UNORM:
+   case PIPE_FORMAT_B10G10R10A2_SNORM:
+   case PIPE_FORMAT_B10G10R10A2_SSCALED:
+   case PIPE_FORMAT_B10G10R10A2_USCALED:
+   case PIPE_FORMAT_R8G8B8A8_USCALED:
+   case PIPE_FORMAT_R16G16B16A16_USCALED:
+      return GLSL_TYPE_UINT;
+   case PIPE_FORMAT_R8G8B8A8_SSCALED:
+   case PIPE_FORMAT_R16G16B16A16_SSCALED:
+      return GLSL_TYPE_INT;
+   default:
+      return GLSL_TYPE_ERROR;
+   }
+}
+
 typedef  nir_def *
 (*shift_right_func)(nir_builder *build, nir_def *src0, nir_def *src1);
 
@@ -157,6 +180,18 @@ dxil_nir_lower_vs_vertex_conversion(nir_shader *s,
                                     enum pipe_format target_formats[])
 {
    assert(s->info.stage == MESA_SHADER_VERTEX);
+
+   bool retyped = false;
+   nir_foreach_shader_in_variable(var, s) {
+      enum glsl_base_type base_type =
+         get_emulated_input_base_type(get_input_target_format(var, target_formats));
+      if (base_type == GLSL_TYPE_ERROR || !glsl_type_is_vector_or_scalar(var->type))
+         continue;
+      var->type = glsl_vector_type(base_type, glsl_get_vector_elements(var->type));
+      retyped = true;
+   }
+   if (retyped)
+      nir_fixup_deref_types(s);
 
    bool result =
          nir_shader_lower_instructions(s,
