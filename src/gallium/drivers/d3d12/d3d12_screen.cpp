@@ -87,6 +87,7 @@ enum {
     HW_VENDOR_INTEL                 = 0x8086,
     HW_VENDOR_MICROSOFT             = 0x1414,
     HW_VENDOR_NVIDIA                = 0x10de,
+    HW_VENDOR_VIRTIO                = 0x1AF4,
 };
 
 static const char *
@@ -914,6 +915,9 @@ can_attribute_at_vertex(struct d3d12_screen *screen)
    switch (screen->vendor_id)  {
    case HW_VENDOR_MICROSOFT:
       return true;
+   /* Advertises barycentrics, but its Metal host reads zero from attributeAtVertex. */
+   case HW_VENDOR_VIRTIO:
+      return false;
    default:
       return screen->opts3.BarycentricsSupported;
    }
