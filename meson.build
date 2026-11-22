@@ -1790,7 +1790,7 @@ endif
 reactos_source_dir = get_option('reactos-source-dir')
 reactos_build_dir = get_option('reactos-build-dir')
 reactos_include_dir = reactos_source_dir / 'sdk/include/libernt'
-if reactos_source_dir != '' and not fs.is_dir(reactos_include_dir)
+if reactos_source_dir != '' and not fs.is_file(reactos_include_dir / 'libs/zlib/zlib.h')
   # TODO: drop the sdk/include/reactos fallback once every supported LiberNT tree uses sdk/include/libernt
   reactos_include_dir = reactos_source_dir / 'sdk/include/reactos'
 endif

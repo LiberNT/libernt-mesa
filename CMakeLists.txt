@@ -34,7 +34,7 @@ if(NOT MESA_WGL_DLL_NAME MATCHES "^[A-Za-z0-9_-]+$")
 endif()
 set(MESA_REACTOS_SOURCE_DIR "" CACHE PATH "ReactOS source tree providing KMT and zlib headers")
 set(MESA_REACTOS_BUILD_DIR "" CACHE PATH "ReactOS Release build providing KMT and zlib archives")
-if(EXISTS "${MESA_REACTOS_SOURCE_DIR}/sdk/include/libernt")
+if(EXISTS "${MESA_REACTOS_SOURCE_DIR}/sdk/include/libernt/libs/zlib/zlib.h")
     set(MESA_REACTOS_INCLUDE_DIR "${MESA_REACTOS_SOURCE_DIR}/sdk/include/libernt")
 else()
     # TODO: drop the sdk/include/reactos fallback once every supported LiberNT tree uses sdk/include/libernt
