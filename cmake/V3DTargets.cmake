@@ -27,8 +27,8 @@ function(mesa_v3d_target_defaults target)
         "${PROJECT_SOURCE_DIR}/src/gallium/drivers/v3d"
         "${PROJECT_BINARY_DIR}/src/gallium/winsys"
         "${PROJECT_SOURCE_DIR}/src/gallium/winsys"
-        "${MESA_REACTOS_SOURCE_DIR}/sdk/include/reactos"
-        "${MESA_REACTOS_SOURCE_DIR}/sdk/include/reactos/libs/zlib")
+        "${MESA_REACTOS_INCLUDE_DIR}"
+        "${MESA_REACTOS_INCLUDE_DIR}/libs/zlib")
     target_compile_options(${target} PRIVATE
         "$<$<COMPILE_LANGUAGE:C>:-fvisibility=hidden>"
         "$<$<COMPILE_LANGUAGE:C>:-DXXH_FORCE_ALIGN_CHECK=0>"

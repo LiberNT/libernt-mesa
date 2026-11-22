@@ -124,7 +124,7 @@ target_include_directories(d3d10zink PRIVATE
     "${PROJECT_SOURCE_DIR}/src/gallium/frontends/d3d10umd"
     "${PROJECT_BINARY_DIR}/src/gallium/drivers"
     "${PROJECT_SOURCE_DIR}/src/gallium/drivers"
-    "${MESA_REACTOS_SOURCE_DIR}/sdk/include/reactos")
+    "${MESA_REACTOS_INCLUDE_DIR}")
 target_compile_options(d3d10zink PRIVATE
     "$<$<COMPILE_LANGUAGE:C>:-DXXH_FORCE_ALIGN_CHECK=0>"
     "$<$<COMPILE_LANGUAGE:C>:-DXXH_FORCE_MEMORY_ACCESS=0>")

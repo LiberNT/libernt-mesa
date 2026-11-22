@@ -214,7 +214,7 @@ target_include_directories(mesa_util PRIVATE
 )
 if(MESA_V3D)
     target_include_directories(mesa_util PRIVATE
-        "${MESA_REACTOS_SOURCE_DIR}/sdk/include/reactos/libs/zlib"
+        "${MESA_REACTOS_INCLUDE_DIR}/libs/zlib"
     )
 endif()
 target_compile_options(mesa_util PRIVATE
@@ -251,7 +251,7 @@ target_include_directories(xmlconfig PRIVATE
 )
 if(MESA_V3D)
     target_include_directories(xmlconfig PRIVATE
-        "${MESA_REACTOS_SOURCE_DIR}/sdk/include/reactos/libs/zlib"
+        "${MESA_REACTOS_INCLUDE_DIR}/libs/zlib"
     )
 endif()
 target_compile_options(xmlconfig PRIVATE
@@ -567,7 +567,7 @@ target_include_directories(nir PRIVATE
 )
 if(MESA_V3D)
     target_include_directories(nir PRIVATE
-        "${MESA_REACTOS_SOURCE_DIR}/sdk/include/reactos/libs/zlib"
+        "${MESA_REACTOS_INCLUDE_DIR}/libs/zlib"
     )
 endif()
 target_compile_options(nir PRIVATE
@@ -626,7 +626,7 @@ target_include_directories(vtn PRIVATE
 )
 if(MESA_V3D)
     target_include_directories(vtn PRIVATE
-        "${MESA_REACTOS_SOURCE_DIR}/sdk/include/reactos/libs/zlib"
+        "${MESA_REACTOS_INCLUDE_DIR}/libs/zlib"
     )
 endif()
 target_compile_options(vtn PRIVATE
@@ -675,7 +675,7 @@ target_include_directories(glcpp PRIVATE
 )
 if(MESA_V3D)
     target_include_directories(glcpp PRIVATE
-        "${MESA_REACTOS_SOURCE_DIR}/sdk/include/reactos/libs/zlib"
+        "${MESA_REACTOS_INCLUDE_DIR}/libs/zlib"
     )
 endif()
 target_compile_options(glcpp PRIVATE
@@ -787,7 +787,7 @@ target_include_directories(glsl PRIVATE
 )
 if(MESA_V3D)
     target_include_directories(glsl PRIVATE
-        "${MESA_REACTOS_SOURCE_DIR}/sdk/include/reactos/libs/zlib"
+        "${MESA_REACTOS_INCLUDE_DIR}/libs/zlib"
     )
 endif()
 target_compile_options(glsl PRIVATE
@@ -829,7 +829,7 @@ if(MESA_V3D)
             "${PROJECT_SOURCE_DIR}/src"
             "${PROJECT_BINARY_DIR}/src/broadcom"
             "${PROJECT_SOURCE_DIR}/src/broadcom"
-            "${MESA_REACTOS_SOURCE_DIR}/sdk/include/reactos/libs/zlib"
+            "${MESA_REACTOS_INCLUDE_DIR}/libs/zlib"
         )
     endif()
     if(MESA_V3D)
@@ -896,7 +896,7 @@ if(MESA_V3D)
             "${PROJECT_SOURCE_DIR}/src/compiler/nir"
             "${PROJECT_BINARY_DIR}/src/compiler"
             "${PROJECT_SOURCE_DIR}/src/compiler"
-            "${MESA_REACTOS_SOURCE_DIR}/sdk/include/reactos/libs/zlib"
+            "${MESA_REACTOS_INCLUDE_DIR}/libs/zlib"
             "${PROJECT_BINARY_DIR}/src/util"
             "${PROJECT_BINARY_DIR}/src/util/format"
         )
@@ -1031,7 +1031,7 @@ if(MESA_V3D)
             "${PROJECT_SOURCE_DIR}/src/compiler/nir"
             "${PROJECT_BINARY_DIR}/src/compiler"
             "${PROJECT_SOURCE_DIR}/src/compiler"
-            "${MESA_REACTOS_SOURCE_DIR}/sdk/include/reactos/libs/zlib"
+            "${MESA_REACTOS_INCLUDE_DIR}/libs/zlib"
             "${PROJECT_BINARY_DIR}/src/util"
             "${PROJECT_BINARY_DIR}/src/util/format"
         )
@@ -1069,7 +1069,7 @@ if(MESA_V3D)
             "${PROJECT_SOURCE_DIR}/src"
             "${PROJECT_BINARY_DIR}/src/broadcom/cle"
             "${PROJECT_SOURCE_DIR}/src/broadcom/cle"
-            "${MESA_REACTOS_SOURCE_DIR}/sdk/include/reactos/libs/zlib"
+            "${MESA_REACTOS_INCLUDE_DIR}/libs/zlib"
             "${PROJECT_BINARY_DIR}/src/util"
             "${PROJECT_BINARY_DIR}/src/util/format"
         )
@@ -1115,7 +1115,7 @@ target_include_directories(glapi_bridge PRIVATE
 )
 if(MESA_V3D)
     target_include_directories(glapi_bridge PRIVATE
-        "${MESA_REACTOS_SOURCE_DIR}/sdk/include/reactos/libs/zlib"
+        "${MESA_REACTOS_INCLUDE_DIR}/libs/zlib"
     )
 endif()
 target_compile_options(glapi_bridge PRIVATE
@@ -1148,7 +1148,7 @@ target_include_directories(glapi PRIVATE
 )
 if(MESA_V3D)
     target_include_directories(glapi PRIVATE
-        "${MESA_REACTOS_SOURCE_DIR}/sdk/include/reactos/libs/zlib"
+        "${MESA_REACTOS_INCLUDE_DIR}/libs/zlib"
     )
 endif()
 target_compile_options(glapi PRIVATE
@@ -1411,7 +1411,7 @@ target_include_directories(mesa PRIVATE
 )
 if(MESA_V3D)
     target_include_directories(mesa PRIVATE
-        "${MESA_REACTOS_SOURCE_DIR}/sdk/include/reactos/libs/zlib"
+        "${MESA_REACTOS_INCLUDE_DIR}/libs/zlib"
     )
 endif()
 target_compile_options(mesa PRIVATE
@@ -1656,7 +1656,7 @@ target_include_directories(gallium PRIVATE
 )
 if(MESA_V3D)
     target_include_directories(gallium PRIVATE
-        "${MESA_REACTOS_SOURCE_DIR}/sdk/include/reactos/libs/zlib"
+        "${MESA_REACTOS_INCLUDE_DIR}/libs/zlib"
     )
 endif()
 if(MESA_LLVMPIPE)
@@ -1709,7 +1709,7 @@ target_include_directories(galliumvl_stub PRIVATE
 )
 if(MESA_V3D)
     target_include_directories(galliumvl_stub PRIVATE
-        "${MESA_REACTOS_SOURCE_DIR}/sdk/include/reactos/libs/zlib"
+        "${MESA_REACTOS_INCLUDE_DIR}/libs/zlib"
     )
 endif()
 target_compile_options(galliumvl_stub PRIVATE
@@ -1747,7 +1747,7 @@ target_include_directories(wsgdi PRIVATE
 )
 if(MESA_V3D)
     target_include_directories(wsgdi PRIVATE
-        "${MESA_REACTOS_SOURCE_DIR}/sdk/include/reactos/libs/zlib"
+        "${MESA_REACTOS_INCLUDE_DIR}/libs/zlib"
     )
 endif()
 target_compile_options(wsgdi PRIVATE
@@ -1816,7 +1816,7 @@ if(NOT MESA_LLVMPIPE)
     endif()
     if(MESA_V3D)
         target_include_directories(softpipe PRIVATE
-            "${MESA_REACTOS_SOURCE_DIR}/sdk/include/reactos/libs/zlib"
+            "${MESA_REACTOS_INCLUDE_DIR}/libs/zlib"
         )
     endif()
     if(MESA_PROFILE STREQUAL "arm64" OR MESA_PROFILE STREQUAL "arm64ec" OR MESA_PROFILE STREQUAL "i386" OR MESA_PROFILE STREQUAL "amd64" OR MESA_PROFILE STREQUAL "riscv64")
@@ -1854,8 +1854,8 @@ if(MESA_PROFILE STREQUAL "arm64" OR MESA_PROFILE STREQUAL "arm64ec")
             "${PROJECT_SOURCE_DIR}/src/gallium/auxiliary"
             "${PROJECT_BINARY_DIR}/src/gallium/drivers"
             "${PROJECT_SOURCE_DIR}/src/gallium/drivers"
-            "${MESA_REACTOS_SOURCE_DIR}/sdk/include/reactos/libs/zlib"
-            "${MESA_REACTOS_SOURCE_DIR}/sdk/include/reactos"
+            "${MESA_REACTOS_INCLUDE_DIR}/libs/zlib"
+            "${MESA_REACTOS_INCLUDE_DIR}"
             "${PROJECT_BINARY_DIR}/src/util"
             "${PROJECT_BINARY_DIR}/src/util/format"
         )
@@ -1942,8 +1942,8 @@ if(MESA_PROFILE STREQUAL "arm64" OR MESA_PROFILE STREQUAL "arm64ec")
             "${PROJECT_SOURCE_DIR}/src/compiler/nir"
             "${PROJECT_BINARY_DIR}/src/compiler"
             "${PROJECT_SOURCE_DIR}/src/compiler"
-            "${MESA_REACTOS_SOURCE_DIR}/sdk/include/reactos/libs/zlib"
-            "${MESA_REACTOS_SOURCE_DIR}/sdk/include/reactos"
+            "${MESA_REACTOS_INCLUDE_DIR}/libs/zlib"
+            "${MESA_REACTOS_INCLUDE_DIR}"
             "${PROJECT_BINARY_DIR}/src/util"
             "${PROJECT_BINARY_DIR}/src/util/format"
         )
@@ -1995,7 +1995,7 @@ target_include_directories(wgl PRIVATE
 )
 if(MESA_V3D)
     target_include_directories(wgl PRIVATE
-        "${MESA_REACTOS_SOURCE_DIR}/sdk/include/reactos"
+        "${MESA_REACTOS_INCLUDE_DIR}"
     )
 endif()
 target_compile_options(wgl PRIVATE
@@ -2043,8 +2043,8 @@ target_include_directories(mesa_gallium PRIVATE
 )
 if(MESA_V3D)
     target_include_directories(mesa_gallium PRIVATE
-        "${MESA_REACTOS_SOURCE_DIR}/sdk/include/reactos/libs/zlib"
-        "${MESA_REACTOS_SOURCE_DIR}/sdk/include/reactos"
+        "${MESA_REACTOS_INCLUDE_DIR}/libs/zlib"
+        "${MESA_REACTOS_INCLUDE_DIR}"
     )
 endif()
 if(MESA_LLVMPIPE)
@@ -2193,7 +2193,7 @@ target_include_directories(opengl32 PRIVATE
 )
 if(MESA_V3D)
     target_include_directories(opengl32 PRIVATE
-        "${MESA_REACTOS_SOURCE_DIR}/sdk/include/reactos/libs/zlib"
+        "${MESA_REACTOS_INCLUDE_DIR}/libs/zlib"
     )
 endif()
 target_compile_options(opengl32 PRIVATE

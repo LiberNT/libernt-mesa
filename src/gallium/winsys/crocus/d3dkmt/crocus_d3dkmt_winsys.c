@@ -61,7 +61,7 @@
 typedef NTSTATUS (NTAPI *PFN_NT_COMPARE_OBJECTS)(HANDLE, HANDLE);
 
 /* The descriptor dwmapi stores as the private runtime data of a window's
- * shared surface (sdk/include/reactos/dwmframe.h in LiberNT).
+ * shared surface (sdk/include/libernt/dwmframe.h in LiberNT).
  */
 struct cd3d_shared_info {
    uint32_t magic;

@@ -55,8 +55,8 @@ target_include_directories(rpi5vc4d3d PRIVATE
     "${PROJECT_SOURCE_DIR}/src/broadcom"
     "${PROJECT_BINARY_DIR}/src/broadcom/cle"
     "${PROJECT_SOURCE_DIR}/src/broadcom/cle"
-    "${MESA_REACTOS_SOURCE_DIR}/sdk/include/reactos"
-    "${MESA_REACTOS_SOURCE_DIR}/sdk/include/reactos/libs/zlib")
+    "${MESA_REACTOS_INCLUDE_DIR}"
+    "${MESA_REACTOS_INCLUDE_DIR}/libs/zlib")
 target_compile_definitions(rpi5vc4d3d PRIVATE GALLIUM_V3D)
 target_compile_options(rpi5vc4d3d PRIVATE
     "-idirafter${MESA_REACTOS_SOURCE_DIR}/sdk/include/psdk"

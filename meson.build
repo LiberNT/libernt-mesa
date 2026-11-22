@@ -1789,6 +1789,11 @@ endif
 # IMPORTANT: We can't upgrade Zlib beyond 1.2.5 because it would break Viewperf.
 reactos_source_dir = get_option('reactos-source-dir')
 reactos_build_dir = get_option('reactos-build-dir')
+reactos_include_dir = reactos_source_dir / 'sdk/include/libernt'
+if reactos_source_dir != '' and not fs.is_dir(reactos_include_dir)
+  # TODO: drop the sdk/include/reactos fallback once every supported LiberNT tree uses sdk/include/libernt
+  reactos_include_dir = reactos_source_dir / 'sdk/include/reactos'
+endif
 if (with_platform_windows and (with_gallium_vc4 or with_gallium_v3d) and not get_option('zlib').disabled() and
     reactos_source_dir != '' and reactos_build_dir != '')
   dep_reactos_zlib = cc.find_library(
@@ -1800,7 +1805,7 @@ if (with_platform_windows and (with_gallium_vc4 or with_gallium_v3d) and not get
   dep_zlib = declare_dependency(
     dependencies : dep_reactos_zlib,
     include_directories : include_directories(
-      reactos_source_dir / 'sdk/include/reactos/libs/zlib',
+      reactos_include_dir / 'libs/zlib',
     ),
   )
 else

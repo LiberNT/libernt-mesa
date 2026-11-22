@@ -15,7 +15,7 @@ dep_vc4kmt = cc.find_library(
   static : true,
 )
 dep_v3d_gdi32 = cc.find_library('gdi32', required : true)
-dep_v3d_trace = declare_dependency(include_directories : include_directories(reactos_source_dir / 'sdk/include/reactos'))
+dep_v3d_trace = declare_dependency(include_directories : include_directories(reactos_include_dir))
 
 libv3dwinsys = static_library(
   'v3dwinsys',
