@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 Ahmed ARIF <arif.ing@outlook.com>
 # Native CMake target graph for the Imagination PowerVR Vulkan ICD over the
-# ReactOS pvrkmt transport.
+# LiberNT pvrkmt transport.
 
 set(_mesa_img "${PROJECT_SOURCE_DIR}/src/imagination")
 set(_mesa_img_build "${PROJECT_BINARY_DIR}/src/imagination")
-set(_mesa_pvrkmt_include "${MESA_REACTOS_SOURCE_DIR}/sdk/lib/pvrkmt/include")
-set(_mesa_pvrkmt_library "${MESA_REACTOS_BUILD_DIR}/sdk/lib/pvrkmt/libpvrkmt.a")
+set(_mesa_pvrkmt_include "${MESA_LIBERNT_SOURCE_DIR}/sdk/lib/pvrkmt/include")
+set(_mesa_pvrkmt_library "${MESA_LIBERNT_BUILD_DIR}/sdk/lib/pvrkmt/libpvrkmt.a")
 
 function(mesa_pvr_target_defaults target)
     mesa_target_defaults(${target})

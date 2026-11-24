@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-# Native CMake target graph for the ReactOS V3D Gallium driver.
+# Native CMake target graph for the LiberNT V3D Gallium driver.
 
 function(mesa_v3d_target_defaults target)
     mesa_target_defaults(${target})
@@ -27,8 +27,8 @@ function(mesa_v3d_target_defaults target)
         "${PROJECT_SOURCE_DIR}/src/gallium/drivers/v3d"
         "${PROJECT_BINARY_DIR}/src/gallium/winsys"
         "${PROJECT_SOURCE_DIR}/src/gallium/winsys"
-        "${MESA_REACTOS_INCLUDE_DIR}"
-        "${MESA_REACTOS_INCLUDE_DIR}/libs/zlib")
+        "${MESA_LIBERNT_INCLUDE_DIR}"
+        "${MESA_LIBERNT_INCLUDE_DIR}/libs/zlib")
     target_compile_options(${target} PRIVATE
         "$<$<COMPILE_LANGUAGE:C>:-fvisibility=hidden>"
         "$<$<COMPILE_LANGUAGE:C>:-DXXH_FORCE_ALIGN_CHECK=0>"
@@ -121,4 +121,4 @@ target_link_libraries(mesa_gallium PRIVATE
     v3d-perfcntrs-v71
     v3d-v42
     v3d-v71
-    "${MESA_REACTOS_BUILD_DIR}/sdk/lib/vc4kmt/libvc4kmt.a")
+    "${MESA_LIBERNT_BUILD_DIR}/sdk/lib/vc4kmt/libvc4kmt.a")

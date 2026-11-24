@@ -2,7 +2,7 @@
  * Copyright 2026 Ostap Brehin <osbre@protonmail.com>
  * SPDX-License-Identifier: MIT
  *
- * The batch decoder parses genxml with expat, which the ReactOS SDK build
+ * The batch decoder parses genxml with expat, which the LiberNT SDK build
  * does not have.  INTEL_DEBUG=bat prints nothing in this build.
  */
 

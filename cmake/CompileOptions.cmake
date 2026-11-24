@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-# Compiler settings for the llvm-mingw ReactOS profiles.
+# Compiler settings for the llvm-mingw LiberNT profiles.
 list(APPEND MESA_C_OPTIONS
     "-D_FILE_OFFSET_BITS=64"
     "-Wall"
@@ -287,7 +287,7 @@ if(MESA_LLVMPIPE)
 endif()
 set(MESA_LINK_LIBM "-lm")
 set(MESA_LINK_SYNCHRONIZATION "-lsynchronization")
-if(MESA_REACTOS_SDK)
+if(MESA_LIBERNT_SDK)
     set(MESA_LINK_LIBM "")
     foreach(_mesa_mingw_only "-DHAS_SCHED_H" "-DHAVE_ENDIAN_H" "-DHAVE_CET_H" "-DHAVE_STRTOK_R")
         list(REMOVE_ITEM MESA_C_OPTIONS "${_mesa_mingw_only}")

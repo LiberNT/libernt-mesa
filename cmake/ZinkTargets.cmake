@@ -104,7 +104,7 @@ add_library(d3d10zink SHARED EXCLUDE_FROM_ALL
     "${PROJECT_SOURCE_DIR}/src/gallium/targets/d3d10umd/d3d10zink.def")
 mesa_target_defaults(d3d10zink)
 target_include_directories(d3d10zink BEFORE PRIVATE
-    "${MESA_REACTOS_SOURCE_DIR}/sdk/include/ddk")
+    "${MESA_LIBERNT_SOURCE_DIR}/sdk/include/ddk")
 target_include_directories(d3d10zink PRIVATE
     "${PROJECT_BINARY_DIR}/include"
     "${PROJECT_SOURCE_DIR}/include"
@@ -124,7 +124,7 @@ target_include_directories(d3d10zink PRIVATE
     "${PROJECT_SOURCE_DIR}/src/gallium/frontends/d3d10umd"
     "${PROJECT_BINARY_DIR}/src/gallium/drivers"
     "${PROJECT_SOURCE_DIR}/src/gallium/drivers"
-    "${MESA_REACTOS_INCLUDE_DIR}")
+    "${MESA_LIBERNT_INCLUDE_DIR}")
 target_compile_options(d3d10zink PRIVATE
     "$<$<COMPILE_LANGUAGE:C>:-DXXH_FORCE_ALIGN_CHECK=0>"
     "$<$<COMPILE_LANGUAGE:C>:-DXXH_FORCE_MEMORY_ACCESS=0>")

@@ -52,7 +52,7 @@ function(mesa_gallium_intel_target_defaults target)
         "${PROJECT_SOURCE_DIR}/src/gallium/drivers"
         "${PROJECT_SOURCE_DIR}/src/gallium/drivers/crocus"
         "${PROJECT_SOURCE_DIR}/src/gallium/winsys"
-        "${MESA_REACTOS_INCLUDE_DIR}")
+        "${MESA_LIBERNT_INCLUDE_DIR}")
 endfunction()
 
 add_library(intel_dev STATIC EXCLUDE_FROM_ALL)

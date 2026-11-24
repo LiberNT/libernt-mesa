@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 Ahmed ARIF <arif193@gmail.com>
-# Hardware Direct3D 10/11 user-mode driver backed by the ReactOS V3D winsys.
+# Hardware Direct3D 10/11 user-mode driver backed by the LiberNT V3D winsys.
 
 set(_mesa_d3d10umd_sources
     "${PROJECT_SOURCE_DIR}/src/gallium/frontends/d3d10umd/Adapter.cpp"
@@ -25,10 +25,10 @@ add_library(rpi5vc4d3d SHARED EXCLUDE_FROM_ALL
     "${PROJECT_SOURCE_DIR}/src/gallium/targets/d3d10umd/rpi5vc4d3d.def")
 mesa_target_defaults(rpi5vc4d3d)
 
-# The UMD declarations are part of the ReactOS DDK.  Keep this include ahead
+# The UMD declarations are part of the LiberNT DDK.  Keep this include ahead
 # of llvm-mingw so the driver and runtime are built from one ABI definition.
 target_include_directories(rpi5vc4d3d BEFORE PRIVATE
-    "${MESA_REACTOS_SOURCE_DIR}/sdk/include/ddk")
+    "${MESA_LIBERNT_SOURCE_DIR}/sdk/include/ddk")
 target_include_directories(rpi5vc4d3d PRIVATE
     "${PROJECT_BINARY_DIR}/include"
     "${PROJECT_SOURCE_DIR}/include"
@@ -55,11 +55,11 @@ target_include_directories(rpi5vc4d3d PRIVATE
     "${PROJECT_SOURCE_DIR}/src/broadcom"
     "${PROJECT_BINARY_DIR}/src/broadcom/cle"
     "${PROJECT_SOURCE_DIR}/src/broadcom/cle"
-    "${MESA_REACTOS_INCLUDE_DIR}"
-    "${MESA_REACTOS_INCLUDE_DIR}/libs/zlib")
+    "${MESA_LIBERNT_INCLUDE_DIR}"
+    "${MESA_LIBERNT_INCLUDE_DIR}/libs/zlib")
 target_compile_definitions(rpi5vc4d3d PRIVATE GALLIUM_V3D)
 target_compile_options(rpi5vc4d3d PRIVATE
-    "-idirafter${MESA_REACTOS_SOURCE_DIR}/sdk/include/psdk"
+    "-idirafter${MESA_LIBERNT_SOURCE_DIR}/sdk/include/psdk"
     "$<$<COMPILE_LANGUAGE:C>:-DXXH_FORCE_ALIGN_CHECK=0>"
     "$<$<COMPILE_LANGUAGE:C>:-DXXH_FORCE_MEMORY_ACCESS=0>")
 target_link_libraries(rpi5vc4d3d PRIVATE
@@ -86,8 +86,8 @@ target_link_libraries(rpi5vc4d3d PRIVATE
     v3d-perfcntrs-v71
     v3d-v42
     v3d-v71
-    "${MESA_REACTOS_BUILD_DIR}/sdk/lib/vc4kmt/libvc4kmt.a"
-    "${MESA_REACTOS_BUILD_DIR}/sdk/lib/3rdparty/zlib/libzlib.a"
+    "${MESA_LIBERNT_BUILD_DIR}/sdk/lib/vc4kmt/libvc4kmt.a"
+    "${MESA_LIBERNT_BUILD_DIR}/sdk/lib/3rdparty/zlib/libzlib.a"
     "-static-libgcc"
     "-static-libstdc++"
     ${MESA_LINK_LIBM}
