@@ -167,7 +167,7 @@ sp_flush_tex_tile_cache(struct softpipe_tex_tile_cache *tc)
 {
    int pos;
 
-   if (tc->texture) {
+   if (tc && tc->texture) {
       /* caching a texture, mark all entries as empty */
       for (pos = 0; pos < ARRAY_SIZE(tc->entries); pos++) {
          tc->entries[pos].addr.bits.invalid = 1;

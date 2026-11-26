@@ -238,15 +238,6 @@ softpipe_create_context(struct pipe_screen *screen,
       softpipe->cbuf_cache[i] = sp_create_tile_cache( &softpipe->pipe );
    softpipe->zsbuf_cache = sp_create_tile_cache( &softpipe->pipe );
 
-   /* Allocate texture caches */
-   for (sh = 0; sh < ARRAY_SIZE(softpipe->tex_cache); sh++) {
-      for (i = 0; i < screen->shader_caps[sh].max_sampler_views; i++) {
-         softpipe->tex_cache[sh][i] = sp_create_tex_tile_cache(&softpipe->pipe);
-         if (!softpipe->tex_cache[sh][i])
-            goto fail;
-      }
-   }
-
    softpipe->fs_machine = tgsi_exec_machine_create(MESA_SHADER_FRAGMENT);
 
    /* setup quad rendering stages */
