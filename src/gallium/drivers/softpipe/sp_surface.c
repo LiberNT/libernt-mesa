@@ -31,6 +31,73 @@
 #include "sp_surface.h"
 #include "sp_query.h"
 #include "sp_tile_cache.h"
+#include "util/u_inlines.h"
+
+static bool
+sp_box_inside_level(const struct pipe_resource *resource, unsigned level,
+                    const struct pipe_box *box)
+{
+   return box->x >= 0 && box->y >= 0 && box->z >= 0 &&
+          box->x + box->width <= (int)u_minify(resource->width0, level) &&
+          box->y + box->height <= (int)u_minify(resource->height0, level) &&
+          box->z + box->depth <= (int)util_num_layers(resource, level);
+}
+
+static bool
+sp_try_blit_via_translate(struct pipe_context *pipe,
+                          const struct pipe_blit_info *info)
+{
+   const struct util_format_description *src_desc =
+      util_format_description(info->src.format);
+   const struct util_format_description *dst_desc =
+      util_format_description(info->dst.format);
+   unsigned dst_mask = util_format_get_mask(info->dst.format);
+   struct pipe_transfer *src_transfer, *dst_transfer;
+   const uint8_t *src;
+   uint8_t *dst;
+   bool done;
+
+   if (info->src.resource == info->dst.resource ||
+       info->src.resource->nr_samples > 1 ||
+       info->dst.resource->nr_samples > 1 ||
+       !util_format_is_rgba8_variant(src_desc) ||
+       !util_format_is_rgba8_variant(dst_desc) ||
+       src_desc->colorspace != UTIL_FORMAT_COLORSPACE_RGB ||
+       dst_desc->colorspace != UTIL_FORMAT_COLORSPACE_RGB ||
+       (info->mask & dst_mask) != dst_mask ||
+       info->scissor_enable ||
+       info->swizzle_enable ||
+       info->num_window_rectangles > 0 ||
+       info->alpha_blend ||
+       info->src.box.width != info->dst.box.width ||
+       info->src.box.height != info->dst.box.height ||
+       info->src.box.depth != info->dst.box.depth ||
+       !sp_box_inside_level(info->src.resource, info->src.level, &info->src.box) ||
+       !sp_box_inside_level(info->dst.resource, info->dst.level, &info->dst.box))
+      return false;
+
+   src = pipe->texture_map(pipe, info->src.resource, info->src.level,
+                           PIPE_MAP_READ, &info->src.box, &src_transfer);
+   if (!src)
+      return false;
+   dst = pipe->texture_map(pipe, info->dst.resource, info->dst.level,
+                           PIPE_MAP_WRITE, &info->dst.box, &dst_transfer);
+   if (!dst) {
+      pipe->texture_unmap(pipe, src_transfer);
+      return false;
+   }
+
+   done = util_format_translate_3d(info->dst.format, dst, dst_transfer->stride,
+                                   dst_transfer->layer_stride, 0, 0, 0,
+                                   info->src.format, src, src_transfer->stride,
+                                   src_transfer->layer_stride, 0, 0, 0,
+                                   info->src.box.width, info->src.box.height,
+                                   info->src.box.depth);
+
+   pipe->texture_unmap(pipe, dst_transfer);
+   pipe->texture_unmap(pipe, src_transfer);
+   return done;
+}
 
 static void sp_blit(struct pipe_context *pipe,
                     const struct pipe_blit_info *info)
@@ -51,6 +118,9 @@ static void sp_blit(struct pipe_context *pipe,
    if (util_try_blit_via_copy_region(pipe, info, sp->render_cond_query != NULL)) {
       return; /* done */
    }
+
+   if (sp_try_blit_via_translate(pipe, info))
+      return;
 
    if (!util_blitter_is_blit_supported(sp->blitter, info)) {
       debug_printf("softpipe: blit unsupported %s -> %s\n",
