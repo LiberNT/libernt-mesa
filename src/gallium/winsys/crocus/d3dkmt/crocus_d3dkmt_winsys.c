@@ -354,11 +354,12 @@ cd3d_device_open(struct cd3d_device *dev)
    query.pPrivateDriverData = &ids;
    query.PrivateDriverDataSize = sizeof(ids);
    status = D3DKMTQueryAdapterInfo(&query);
-   if (!NT_SUCCESS(status) || ids.DeviceIds.VendorID != 0x8086) {
-      mesa_loge("crocus: adapter device IDs: 0x%08lx, vendor 0x%04x",
-                status, ids.DeviceIds.VendorID);
+   if (!NT_SUCCESS(status)) {
+      mesa_loge("crocus: adapter device IDs query failed: 0x%08lx", status);
       return false;
    }
+   if (ids.DeviceIds.VendorID != 0x8086)
+      return false;
    dev->pci_device_id = ids.DeviceIds.DeviceID;
    dev->pci_revision_id = ids.DeviceIds.RevisionID;
 
