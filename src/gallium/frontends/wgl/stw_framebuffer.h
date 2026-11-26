@@ -106,6 +106,9 @@ struct stw_framebuffer
    bool must_resize;
 
    bool minimized;  /**< Is the window currently minimized? */
+#ifdef __REACTOS__
+   bool window_destroyed;
+#endif
 
    unsigned width;
    unsigned height;

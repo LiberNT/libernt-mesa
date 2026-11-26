@@ -335,6 +335,15 @@ stw_call_window_proc(int nCode, WPARAM wParam, LPARAM lParam)
       else if (pParams->message == WM_DESTROY) {
          stw_lock_framebuffers(stw_dev);
          fb = stw_framebuffer_from_hwnd_hdc_locked( pParams->hwnd, NULL );
+#ifdef __REACTOS__
+         /* A window destroyed again from WM_DESTROY gets a second one; only the first drops the window's reference */
+         if (fb && fb->window_destroyed) {
+            stw_framebuffer_unlock(fb);
+            fb = NULL;
+         }
+         if (fb)
+            fb->window_destroyed = true;
+#endif
          if (fb) {
             struct stw_context *current_context = stw_current_context();
             struct st_context *st = current_context &&
